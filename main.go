@@ -13,6 +13,7 @@ package gourdiangin
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -61,6 +62,20 @@ type ServerConfig struct {
 	CORSConfig      cors.Config
 	Logger          *gourdianlogger.Logger
 	ShutdownTimeout time.Duration
+}
+
+// Validate checks if the ServerConfig fields are valid.
+func (c ServerConfig) Validate() error {
+	if c.Port < 1 || c.Port > 65535 {
+		return fmt.Errorf("invalid port number: %d", c.Port)
+	}
+	if c.UseTLS && (c.TLSCertFile == "" || c.TLSKeyFile == "") {
+		return errors.New("TLS certificate and key files must be provided when UseTLS is true")
+	}
+	if c.Logger == nil {
+		return errors.New("logger must be provided")
+	}
+	return nil
 }
 
 // Server interface defines the core functionality of a Gin HTTP server.
@@ -227,8 +242,8 @@ type GourdianGinServer struct {
 //	    log.Fatalf("Server failed: %v", err)
 //	}
 func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
-	if config.Logger == nil {
-		panic("Logger must be provided in ServerConfig")
+	if err := config.Validate(); err != nil {
+		panic(fmt.Sprintf("Invalid server configuration: %v", err))
 	}
 
 	// Check port availability
