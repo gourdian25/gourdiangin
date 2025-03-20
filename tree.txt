@@ -1,0 +1,13 @@
+.
+├── LICENSE
+├── Readme.md
+├── config.go
+├── docs.go
+├── go.mod
+├── go.sum
+├── main.go
+├── server.go
+├── setup.go
+└── tree.txt
+
+1 directory, 10 files
