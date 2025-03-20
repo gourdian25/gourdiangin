@@ -2,6 +2,7 @@
 
 The `gourdiangin` package is a production-ready HTTP server built on top of the popular Gin framework. It provides a robust, configurable, and easy-to-use server implementation with features like TLS support, CORS configuration, graceful shutdown, and structured logging using the `gourdianlogger` package.
 
+
 ---
 
 ## Table of Contents
@@ -17,6 +18,7 @@ The `gourdiangin` package is a production-ready HTTP server built on top of the 
    - [Graceful Shutdown Example](#graceful-shutdown-example)
 5. [Using Gourdian Logger](#using-gourdian-logger)
 6. [API Reference](#api-reference)
+7. [Sigil - SSL and RSA Key Generation](#sigil-ssl-and-rsa-key-generation)
 
 ---
 
@@ -470,9 +472,88 @@ type GourdianGinServer struct {
 
 ---
 
+## Sigil - SSL and RSA Key Generation
+
+**Sigil** is a powerful and user-friendly command-line tool designed to simplify the generation of:
+1. **Self-signed SSL certificates** for securing gRPC communications.
+2. **RSA keys** for signing and verifying JWT tokens.
+
+This tool is perfect for developers who need to quickly set up secure communication channels or implement JWT-based authentication in their applications. With an intuitive interface powered by [Gum CLI](https://github.com/charmbracelet/gum), Sigil makes certificate and key generation a breeze.
+
+### Features
+
+- **Self-signed SSL Certificates**:
+  - Generate Certificate Authority (CA) certificates.
+  - Create server certificates signed by the CA.
+  - Automatically configure DNS names for the certificates.
+  - Export certificates and keys in PEM format for gRPC.
+
+- **RSA Keys for JWT**:
+  - Generate RSA private and public keys for JWT token signing.
+  - Choose key sizes (2048, 3072, or 4096 bits) for security and performance trade-offs.
+  - Set appropriate file permissions for security.
+
+- **Interactive Interface**:
+  - Powered by Gum CLI for a delightful user experience.
+  - Guided prompts for configuring certificates and keys.
+  - Real-time feedback and progress indicators.
+
+### Installation
+
+You can install Sigil directly using a single command. However, the installation method depends on your shell:
+
+#### For Bash or Zsh
+Run the following command in your terminal:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gourdian25/sigil/master/install.sh | sh
+```
+
+#### For Fish Shell
+Fish shell requires explicit use of `bash` to interpret the script. Run:
+
+```fish
+curl -fsSL https://raw.githubusercontent.com/gourdian25/sigil/master/install.sh | bash
+```
+
+#### Manual Installation
+If the above methods don't work, you can manually download and install Sigil:
+
+1. Download the script:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/gourdian25/sigil/master/install.sh -o install.sh
+   ```
+
+2. Make it executable:
+   ```bash
+   chmod +x install.sh
+   ```
+
+3. Run the script:
+   ```bash
+   ./install.sh
+   ```
+
+This script will:
+1. Download the latest version of Sigil.
+2. Make it executable.
+3. Place it in a directory included in your `$PATH` (e.g., `/usr/local/bin`).
+
+### Usage
+
+To start using Sigil, simply run the following command:
+
+```bash
+sigil
+```
+
+For more detailed usage instructions, refer to the [Sigil Documentation](#sigil-ssl-and-rsa-key-generation).
+
+---
+
 ## Contributing
 
-Contributions to `gourdiangin` are welcome! If you'd like to contribute, please follow these steps:
+Contributions to `gourdiangin` and `Sigil` are welcome! If you'd like to contribute, please follow these steps:
 
 1. Fork the repository: [https://github.com/gourdian25/gourdiangin](https://github.com/gourdian25/gourdiangin).
 2. Create a new branch for your feature or bugfix.
@@ -482,20 +563,21 @@ Contributions to `gourdiangin` are welcome! If you'd like to contribute, please 
 
 ## License
 
-`gourdiangin` is open-source and licensed under the **MIT License**. See the [LICENSE](https://github.com/gourdian25/gourdiangin/blob/master/LICENSE) file for more details.
+`gourdiangin` are open-source and licensed under the **MIT License**. See the [LICENSE](https://github.com/gourdian25/gourdiangin/blob/master/LICENSE) for more details.
 
 ---
 
 ## Support
 
-If you encounter any issues or have questions, please open an issue on the [GitHub repository](https://github.com/gourdian25/gourdiangin/issues).
+If you encounter any issues or have questions, please open an issue on the GitHub repositories:
+- [gourdiangin Issues](https://github.com/gourdian25/gourdiangin/issues)
 
 ---
 
 ## Author
 
-`gourdiangin` is developed and maintained by [gourdian25](https://github.com/gourdian25) and [lordofthemind](https://github.com/lordofthemind).
+`gourdiangin` are developed and maintained by [gourdian25](https://github.com/gourdian25) and [lordofthemind](https://github.com/lordofthemind).
 
 ---
 
-Thank you for using `gourdiangin`! 🚀
+Thank you for using `gourdiangin` and `Sigil`! 🚀
