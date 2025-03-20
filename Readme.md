@@ -2,6 +2,8 @@
 
 The `gourdiangin` package is a production-ready HTTP server built on top of the popular Gin framework. It provides a robust, configurable, and easy-to-use server implementation with features like TLS support, CORS configuration, graceful shutdown, and structured logging using the `gourdianlogger` package.
 
+---
+
 ## Table of Contents
 
 1. [Installation](#installation)
@@ -16,6 +18,8 @@ The `gourdiangin` package is a production-ready HTTP server built on top of the 
 5. [Using Gourdian Logger](#using-gourdian-logger)
 6. [API Reference](#api-reference)
 
+---
+
 ## Installation
 
 To install the `gourdiangin` package, use the following command:
@@ -24,9 +28,11 @@ To install the `gourdiangin` package, use the following command:
 go get github.com/gourdian25/gourdiangin
 ```
 
+---
+
 ## Basic Usage
 
-Here's a simple example to get you started with the `gourdiangin` package:
+Here’s a simple example to get started with the `gourdiangin` package:
 
 ```go
 package main
@@ -73,6 +79,8 @@ func main() {
 }
 ```
 
+---
+
 ## Configuration
 
 The `ServerConfig` struct encapsulates all configuration options for the Gin server setup:
@@ -104,6 +112,8 @@ config := ServerConfig{
     ShutdownTimeout: 30 * time.Second,
 }
 ```
+
+---
 
 ## Examples
 
@@ -156,6 +166,8 @@ func main() {
 }
 ```
 
+---
+
 ### With TLS Example
 
 This example demonstrates how to set up the server with TLS.
@@ -205,6 +217,8 @@ func main() {
 	}
 }
 ```
+
+---
 
 ### With CORS Example
 
@@ -260,6 +274,8 @@ func main() {
 	}
 }
 ```
+
+---
 
 ### Custom Middleware Example
 
@@ -317,6 +333,8 @@ func main() {
 	}
 }
 ```
+
+---
 
 ### Graceful Shutdown Example
 
@@ -383,6 +401,14 @@ func main() {
 }
 ```
 
+---
+
+## Using Gourdian Logger
+
+The `gourdianlogger` package is used for structured logging. It provides configurable log levels, file rotation, and more. Refer to the [gourdianlogger documentation](https://github.com/gourdian25/gourdianlogger) for detailed usage.
+
+---
+
 ## API Reference
 
 ### ServerConfig
@@ -442,9 +468,11 @@ type GourdianGinServer struct {
 - `GetRouter() *gin.Engine`
 - `shutdown() error`
 
+---
+
 ## Contributing
 
-Contributions to gourdiangin are welcome! If you'd like to contribute, please follow these steps:
+Contributions to `gourdiangin` are welcome! If you'd like to contribute, please follow these steps:
 
 1. Fork the repository: [https://github.com/gourdian25/gourdiangin](https://github.com/gourdian25/gourdiangin).
 2. Create a new branch for your feature or bugfix.
@@ -454,7 +482,7 @@ Contributions to gourdiangin are welcome! If you'd like to contribute, please fo
 
 ## License
 
-gourdiangin is open-source and licensed under the **MIT License**. See the [LICENSE](https://github.com/gourdian25/gourdiangin/blob/master/LICENSE) file for more details.
+`gourdiangin` is open-source and licensed under the **MIT License**. See the [LICENSE](https://github.com/gourdian25/gourdiangin/blob/master/LICENSE) file for more details.
 
 ---
 
@@ -466,8 +494,8 @@ If you encounter any issues or have questions, please open an issue on the [GitH
 
 ## Author
 
-gourdiangin is developed and maintained by [gourdian25](https://github.com/gourdian25) and [lordofthemind](https://github.com/lordofthemind).
+`gourdiangin` is developed and maintained by [gourdian25](https://github.com/gourdian25) and [lordofthemind](https://github.com/lordofthemind).
 
 ---
 
-Thank you for using gourdiangin! 🚀
+Thank you for using `gourdiangin`! 🚀
