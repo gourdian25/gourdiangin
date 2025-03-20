@@ -263,14 +263,15 @@ func (gs *GourdianGinServer) Start() error {
 
 	serverErr := make(chan error, 1)
 	go func() {
+		address := fmt.Sprintf(":%d", gs.config.Port)
 		if gs.config.UseTLS {
-			gs.config.Logger.Infof("Starting server on port %d with TLS", gs.config.Port)
+			gs.config.Logger.Infof("Starting server on https://localhost%s with TLS", address)
 			if err := gs.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 				gs.config.Logger.Errorf("Server error: %v", err)
 				serverErr <- err
 			}
 		} else {
-			gs.config.Logger.Infof("Starting server on port %d without TLS", gs.config.Port)
+			gs.config.Logger.Infof("Starting server on http://localhost%s", address)
 			if err := gs.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				gs.config.Logger.Errorf("Server error: %v", err)
 				serverErr <- err
@@ -379,15 +380,24 @@ func (gs *GourdianGinServer) GetRouter() *gin.Engine {
 func (gs *GourdianGinServer) GracefulShutdown() {
 	select {
 	case gs.stopChan <- syscall.SIGTERM:
-		// Signal sent successfully
 		gs.config.Logger.Info("SIGTERM signal sent to server")
 	case <-time.After(1 * time.Second):
 		gs.config.Logger.Warn("Failed to send shutdown signal: stopChan may be closed")
 	}
 
 	// Wait for shutdown to complete
-	gs.shutdownWg.Wait()
-	gs.config.Logger.Info("Server shutdown completed")
+	done := make(chan struct{})
+	go func() {
+		gs.shutdownWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		gs.config.Logger.Info("Server shutdown completed")
+	case <-time.After(gs.config.ShutdownTimeout + 5*time.Second): // Add buffer for safety
+		gs.config.Logger.Error("Server shutdown timed out")
+	}
 }
 
 // ServerSetup interface abstracts the server initialization process,
@@ -481,7 +491,13 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 	}
 
 	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{cert},
+		Certificates:             []tls.Certificate{cert},
+		MinVersion:               tls.VersionTLS12, // Enforce minimum TLS version
+		PreferServerCipherSuites: true,             // Prefer server cipher suites for better security
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		},
 	}
 	return tlsConfig, nil
 }
@@ -537,13 +553,25 @@ func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) {
 //	}
 func (s *ServerSetupImpl) CheckPortAvailability(config ServerConfig) error {
 	address := fmt.Sprintf(":%d", config.Port)
-	listener, err := net.Listen("tcp", address)
+	var listener net.Listener
+	var err error
+
+	// Retry binding up to 3 times
+	for i := 0; i < 3; i++ {
+		listener, err = net.Listen("tcp", address)
+		if err == nil {
+			break
+		}
+		time.Sleep(1 * time.Second) // Wait before retrying
+	}
+
 	if err != nil {
 		if strings.Contains(err.Error(), "bind: address already in use") {
 			return fmt.Errorf("port %d is already in use; please choose a different port or stop the process using this port", config.Port)
 		}
 		return fmt.Errorf("failed to check port availability: %w", err)
 	}
+
 	listener.Close()
 	config.Logger.Infof("Port %d is available", config.Port)
 	return nil
