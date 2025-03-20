@@ -1,13 +1,49 @@
-// Package gourdiangin provides a modular and thread-safe Gin server implementation
-// with comprehensive support for TLS, CORS, and graceful shutdown mechanisms.
+// Package gourdiangin implements a production-ready, thread-safe HTTP server
+// built on the Gin framework with enterprise-grade features including:
 //
-// Key Features:
-// - Highly configurable Gin server with robust TLS and CORS support
-// - Sophisticated graceful shutdown with customizable timeout
-// - Thread-safe server operations with proper synchronization
-// - Seamless integration with gourdianlogger for structured, contextual logging
-// - Port availability verification to prevent binding conflicts
-// - Clean modular architecture enabling straightforward customization and extension
+// # Core Features
+//   - Robust TLS configuration with certificate validation and secure defaults
+//   - Comprehensive CORS policy management for cross-origin requests
+//   - Graceful shutdown with configurable connection draining timeouts
+//   - Thread-safe server operations with proper synchronization primitives
+//   - Port availability verification to prevent startup conflicts
+//   - Structured logging integration via gourdianlogger
+//
+// # Architecture Highlights
+//   - Clear separation of concerns through interface-based design
+//   - Highly testable components with dependency injection support
+//   - Defensive configuration validation to prevent runtime errors
+//   - Concurrent request handling with proper resource cleanup
+//   - Signal-based shutdown coordination (SIGTERM/SIGINT)
+//
+// # Usage Example
+//
+//	logger := gourdianlogger.New(gourdianlogger.Config{Level: "info"})
+//	corsConfig := cors.DefaultConfig()
+//	corsConfig.AllowOrigins = []string{"https://example.com"}
+//
+//	config := gourdiangin.ServerConfig{
+//	    Port:            8443,
+//	    UseTLS:          true,
+//	    TLSCertFile:     "/path/to/cert.pem",
+//	    TLSKeyFile:      "/path/to/key.pem",
+//	    UseCORS:         true,
+//	    CORSConfig:      corsConfig,
+//	    Logger:          logger,
+//	    ShutdownTimeout: 30 * time.Second,
+//	}
+//
+//	setup := &gourdiangin.ServerSetupImpl{}
+//	server := gourdiangin.NewGourdianGinServer(setup, config)
+//
+//	// Register routes
+//	router := server.GetRouter()
+//	router.GET("/api/v1/health", handlers.HealthCheck)
+//
+//	// Start server (blocks until shutdown)
+//	if err := server.Start(); err != nil {
+//	    logger.Fatalf("Server failed: %v", err)
+//	}
 package gourdiangin
 
 import (
@@ -31,25 +67,25 @@ import (
 
 // ServerConfig encapsulates all configuration options for the Gin server setup.
 //
-// Fields:
-//   - Port: The TCP port number the server will listen on
-//   - UseTLS: Boolean flag to enable/disable TLS encryption (HTTPS)
-//   - TLSCertFile: Filesystem path to the TLS certificate file (mandatory when UseTLS=true)
-//   - TLSKeyFile: Filesystem path to the TLS private key file (mandatory when UseTLS=true)
-//   - UseCORS: Boolean flag to enable/disable Cross-Origin Resource Sharing
-//   - CORSConfig: Detailed configuration for CORS policies and allowed origins
-//   - Logger: Structured logger instance for comprehensive server activity tracking
-//   - ShutdownTimeout: Maximum duration to wait for connections to close during shutdown
+// # Configuration Parameters
+//   - Port: TCP port number for listener (1-65535)
+//   - UseTLS: Enables HTTPS with TLS encryption when true
+//   - TLSCertFile: Path to PEM-encoded X.509 certificate file (required when UseTLS=true)
+//   - TLSKeyFile: Path to PEM-encoded private key file (required when UseTLS=true)
+//   - UseCORS: Enables Cross-Origin Resource Sharing middleware when true
+//   - CORSConfig: Fine-grained CORS policy settings (origins, methods, headers, credentials)
+//   - Logger: Structured logger for comprehensive server activity tracking
+//   - ShutdownTimeout: Maximum duration to wait for in-flight requests during shutdown
 //
-// Example:
+// # Example Configuration
 //
 //	config := ServerConfig{
-//	    Port:            8080,
+//	    Port:            8443,
 //	    UseTLS:          true,
-//	    TLSCertFile:     "cert.pem",
-//	    TLSKeyFile:      "key.pem",
+//	    TLSCertFile:     "/path/to/cert.pem",
+//	    TLSKeyFile:      "/path/to/key.pem",
 //	    UseCORS:         true,
-//	    CORSConfig:      cors.DefaultConfig(),
+//	    CORSConfig:      corsConfig,
 //	    Logger:          logger,
 //	    ShutdownTimeout: 30 * time.Second,
 //	}
@@ -80,10 +116,16 @@ func (c ServerConfig) Validate() error {
 
 // Server interface defines the core functionality of a Gin HTTP server.
 //
-// Methods:
-//   - Start(): Initializes and launches the server, returning any startup errors
-//   - GracefulShutdown(): Initiates an orderly shutdown sequence, waiting for connections to complete
+// # Core Methods
+//
+//   - Start(): Launches the HTTP server and begins accepting connections
+//     Returns any startup or runtime errors encountered
+//
+//   - GracefulShutdown(): Initiates orderly termination sequence with connection draining
+//     Blocks until shutdown completes or timeout occurs
+//
 //   - GetRouter(): Provides access to the underlying Gin router for route registration
+//     Can be used to define API endpoints, middleware, and custom handlers
 type Server interface {
 	Start() error
 	GracefulShutdown()
@@ -91,13 +133,21 @@ type Server interface {
 }
 
 // ServerSetup interface abstracts the server initialization process,
-// allowing for flexible configuration and potential mocking in tests.
+// allowing for flexible configuration and testability through dependency injection.
 //
-// Methods:
-//   - SetUpRouter(): Constructs and configures a new Gin router instance
-//   - SetUpTLS(): Prepares TLS configuration based on certificate settings
-//   - SetUpCORS(): Applies CORS middleware with appropriate policies
-//   - CheckPortAvailability(): Verifies the configured port is available for binding
+// # Core Responsibilities
+//
+//   - SetUpRouter(): Constructs a properly configured Gin router instance
+//     Applies common middleware and establishes base configuration
+//
+//   - SetUpTLS(): Prepares a secure TLS configuration for HTTPS connections
+//     Loads and validates certificates, sets cipher suites and security parameters
+//
+//   - SetUpCORS(): Configures cross-origin request policies and restrictions
+//     Applies appropriate CORS middleware based on security requirements
+//
+//   - CheckPortAvailability(): Validates the chosen port is available for binding
+//     Prevents conflicts with other services and provides clear diagnostics
 type ServerSetup interface {
 	SetUpRouter(config ServerConfig) *gin.Engine
 	SetUpTLS(config ServerConfig) (*tls.Config, error)
@@ -108,18 +158,24 @@ type ServerSetup interface {
 // ServerSetupImpl provides the standard implementation of the ServerSetup interface.
 type ServerSetupImpl struct{}
 
-// SetUpRouter constructs a new Gin router with sensible defaults.
+// SetUpRouter constructs a new Gin router with appropriate default middleware.
 //
-// Parameters:
+// # Functionality
+//   - Creates a new Gin router instance with reasonable defaults
+//   - Configures built-in logging and recovery middleware
+//   - Returns a router ready for custom route registration
+//
+// # Parameters
 //   - config: Complete server configuration options
 //
-// Returns:
-//   - *gin.Engine: Fully configured Gin router ready for route registration
+// # Returns
+//   - *gin.Engine: Configured Gin router ready for use
 //
-// Example:
+// # Example Usage
 //
 //	router := setup.SetUpRouter(config)
-//	router.GET("/ping", handlePing)
+//	router.GET("/api/v1/users", middleware.Authenticate(), handlers.ListUsers)
+//	router.POST("/api/v1/login", handlers.Login)
 func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *gin.Engine {
 	router := gin.Default()
 	// Add custom middleware or configurations here if needed
@@ -128,18 +184,28 @@ func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *gin.Engine {
 
 // SetUpTLS prepares the TLS configuration for secure HTTPS connections.
 //
-// Parameters:
+// # Functionality
+//   - Loads and validates X.509 certificate and private key
+//   - Configures TLS settings according to current security best practices
+//   - Returns a complete TLS configuration ready for server use
+//
+// # Parameters
 //   - config: Server configuration containing TLS certificate paths
 //
-// Returns:
-//   - *tls.Config: Complete TLS configuration ready for server use
-//   - error: Detailed error if TLS setup fails (nil on success)
+// # Returns
+//   - *tls.Config: Complete TLS configuration for secure connections
+//   - error: Detailed error if certificate loading or validation fails
 //
-// Example:
+// # Error Conditions
+//   - Missing certificate or key files when TLS is enabled
+//   - Invalid or corrupted certificate/key format
+//   - Permission issues accessing certificate files
+//
+// # Example Usage
 //
 //	tlsConfig, err := setup.SetUpTLS(config)
 //	if err != nil {
-//	    config.Logger.Fatalf("TLS configuration failed: %v", err)
+//	    logger.Fatalf("TLS configuration failed: %v", err)
 //	}
 func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 	if !config.UseTLS {
@@ -162,16 +228,24 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 	return tlsConfig, nil
 }
 
-// SetUpCORS configures and applies CORS policies to control cross-origin requests.
+// SetUpCORS configures and applies CORS policies to the Gin router.
 //
-// Parameters:
+// # Functionality
+//   - Applies Cross-Origin Resource Sharing middleware if enabled
+//   - Configures allowed origins, methods, headers, and credentials
+//   - Logs applied CORS configuration for transparency
+//
+// # Parameters
 //   - router: Gin router instance to which CORS middleware will be applied
 //   - config: Server configuration containing CORS settings
 //
-// Example:
+// # Example Configuration
 //
+//	corsConfig := cors.DefaultConfig()
+//	corsConfig.AllowOrigins = []string{"https://trusted-site.com"}
+//	corsConfig.AllowCredentials = true
+//	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE"}
 //	setup.SetUpCORS(router, config)
-//	// Router now has CORS middleware applied
 func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) {
 	if config.UseCORS {
 		router.Use(cors.New(config.CORSConfig))
@@ -181,16 +255,27 @@ func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) {
 
 // CheckPortAvailability verifies the configured port is available for binding.
 //
-// Parameters:
+// # Functionality
+//   - Attempts to bind to the specified port to verify availability
+//   - Provides descriptive error messages for unavailable ports
+//   - Logs confirmation when port is available
+//
+// # Parameters
 //   - config: Server configuration containing the port to check
 //
-// Returns:
+// # Returns
 //   - error: Descriptive error if port is unavailable (nil if port is free)
 //
-// Example:
+// # Error Conditions
+//   - Port already in use by another process
+//   - Insufficient permissions to bind to the port
+//   - System networking configuration issues
+//
+// # Example Usage
 //
 //	if err := setup.CheckPortAvailability(config); err != nil {
-//	    config.Logger.Fatalf("Cannot start server: %v", err)
+//	    logger.Fatalf("Port availability check failed: %v", err)
+//	    // Consider fallback to alternative port or exit
 //	}
 func (s *ServerSetupImpl) CheckPortAvailability(config ServerConfig) error {
 	address := fmt.Sprintf(":%d", config.Port)
@@ -209,13 +294,18 @@ func (s *ServerSetupImpl) CheckPortAvailability(config ServerConfig) error {
 // GourdianGinServer is the concrete implementation of the Server interface,
 // providing a complete, production-ready Gin HTTP server with all features.
 //
-// Fields:
+// # Core Components
 //   - router: Gin router handling HTTP request routing and middleware
-//   - server: Underlying HTTP server instance managing connections
+//   - server: Underlying HTTP server managing connection lifecycle
 //   - serverSetup: Strategy for server configuration and initialization
-//   - config: Complete server configuration parameters
-//   - shutdownWg: WaitGroup coordinating graceful shutdown sequence
+//   - config: Complete set of server configuration parameters
+//   - shutdownWg: WaitGroup for coordinating graceful shutdown sequence
 //   - stopChan: Signal channel for handling termination requests
+//
+// # Concurrency Model
+//   - Thread-safe server operations with proper synchronization
+//   - Signal-based shutdown coordination
+//   - Waitgroup-based completion tracking for graceful termination
 type GourdianGinServer struct {
 	router      *gin.Engine
 	server      *http.Server
@@ -227,19 +317,37 @@ type GourdianGinServer struct {
 
 // NewGourdianGinServer constructs a fully configured Server instance ready to start.
 //
-// Parameters:
+// # Functionality
+//   - Validates configuration to ensure all parameters are valid
+//   - Verifies port availability to prevent binding conflicts
+//   - Sets up TLS if enabled for secure HTTPS connections
+//   - Configures CORS policies for cross-origin request handling
+//   - Establishes signal handling for graceful termination
+//
+// # Parameters
 //   - setup: Implementation of ServerSetup for initialization strategy
 //   - config: Complete configuration parameters for the server
 //
-// Returns:
-//   - Server: Ready-to-use server instance
+// # Returns
+//   - Server: Ready-to-use server instance implementing Server interface
 //
-// Example:
+// # Panics
+//   - Invalid server configuration (prevents creation of misconfigured server)
+//   - Port unavailability (prevents attempts to bind to unavailable ports)
+//   - TLS configuration errors (prevents insecure server creation when TLS requested)
+//
+// # Example Usage
 //
 //	setup := &ServerSetupImpl{}
 //	server := NewGourdianGinServer(setup, config)
+//
+//	// Register routes
+//	router := server.GetRouter()
+//	registerAPIRoutes(router)
+//
+//	// Start server (blocks until shutdown)
 //	if err := server.Start(); err != nil {
-//	    log.Fatalf("Server failed: %v", err)
+//	    logger.Fatalf("Server failed: %v", err)
 //	}
 func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
 	if err := config.Validate(); err != nil {
@@ -281,14 +389,31 @@ func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
 // Start launches the HTTP server and begins accepting connections.
 // It blocks until server shutdown is triggered by signals or errors.
 //
-// Returns:
+// # Functionality
+//   - Starts the HTTP/HTTPS server based on configuration
+//   - Handles TLS setup when secure connections are enabled
+//   - Monitors for shutdown signals or server errors
+//   - Coordinates graceful termination when shutdown is triggered
+//
+// # Returns
 //   - error: Any server startup or runtime error encountered
 //
-// Example:
+// # Error Conditions
+//   - Binding failures (port conflicts, permission issues)
+//   - TLS handshake errors
+//   - Network I/O errors during operation
 //
+// # Example Usage
+//
+//	// Start in main goroutine (blocks until shutdown)
+//	if err := server.Start(); err != nil {
+//	    logger.Fatalf("Server error: %v", err)
+//	}
+//
+//	// Start in separate goroutine
 //	go func() {
-//	    if err := server.Start(); err != nil {
-//	        log.Fatalf("Server error: %v", err)
+//	    if err := server.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+//	        logger.Fatalf("Server error: %v", err)
 //	    }
 //	}()
 func (gs *GourdianGinServer) Start() error {
@@ -324,8 +449,17 @@ func (gs *GourdianGinServer) Start() error {
 // shutdown performs the actual graceful termination sequence for the server.
 // It allows existing connections to complete within the configured timeout.
 //
-// Returns:
+// # Functionality
+//   - Creates context with timeout for connection draining
+//   - Initiates graceful HTTP server shutdown sequence
+//   - Logs completion of shutdown process
+//
+// # Returns
 //   - error: Any error encountered during the shutdown process
+//
+// # Timeout Behavior
+//   - Uses ShutdownTimeout from config (defaults to 30s if unspecified)
+//   - Forces termination after timeout expires regardless of connection state
 func (gs *GourdianGinServer) shutdown() error {
 	gs.config.Logger.Info("Shutting down server...")
 
@@ -348,15 +482,28 @@ func (gs *GourdianGinServer) shutdown() error {
 
 // GetRouter provides access to the underlying Gin router for route registration.
 //
-// Returns:
+// # Functionality
+//   - Returns the Gin router instance used by this server
+//   - Allows registration of routes, middleware, and handlers
+//
+// # Returns
 //   - *gin.Engine: The Gin router instance used by this server
 //
-// Example:
+// # Example Usage
 //
 //	router := server.GetRouter()
-//	router.GET("/health", func(c *gin.Context) {
-//	    c.JSON(http.StatusOK, gin.H{"status": "healthy"})
-//	})
+//
+//	// Register API routes
+//	router.GET("/api/v1/health", handlers.HealthCheck)
+//	router.POST("/api/v1/users", middleware.Authenticate(), handlers.CreateUser)
+//
+//	// Apply middleware to route groups
+//	api := router.Group("/api/v2")
+//	api.Use(middleware.RateLimiter())
+//	{
+//	    api.GET("/products", handlers.ListProducts)
+//	    api.GET("/products/:id", handlers.GetProduct)
+//	}
 func (gs *GourdianGinServer) GetRouter() *gin.Engine {
 	return gs.router
 }
@@ -364,11 +511,28 @@ func (gs *GourdianGinServer) GetRouter() *gin.Engine {
 // GracefulShutdown initiates an orderly server shutdown sequence,
 // allowing in-flight requests to complete within the timeout period.
 //
-// Example:
+// # Functionality
+//   - Sends termination signal through stopChan
+//   - Waits for shutdown process to complete
+//   - Logs completion of shutdown sequence
 //
-//	// In a separate goroutine or signal handler:
+// # Concurrency Safety
+//   - Safe to call from any goroutine
+//   - Uses WaitGroup to ensure complete termination
+//   - Implements timeout to prevent indefinite blocking
+//
+// # Example Usage
+//
+//	// Shutdown after specific event
+//	if criticalError {
+//	    server.GracefulShutdown()
+//	}
+//
+//	// Shutdown on application termination
+//	signals := make(chan os.Signal, 1)
+//	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 //	go func() {
-//	    <-shutdownTrigger
+//	    <-signals
 //	    server.GracefulShutdown()
 //	}()
 func (gs *GourdianGinServer) GracefulShutdown() {
