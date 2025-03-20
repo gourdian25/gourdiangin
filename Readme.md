@@ -580,4 +580,4 @@ If you encounter any issues or have questions, please open an issue on the GitHu
 
 ---
 
-Thank you for using `gourdiangin` and `Sigil`! 🚀
+Thank you for using `gourdiangin`! 🚀
