@@ -1,15 +1,25 @@
 package gourdiangin
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gourdian25/gourdianlogger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -170,75 +180,262 @@ func TestGourdianGinServer_StartShutdown(t *testing.T) {
 	}
 }
 
-// // TestServerSetupImpl_SetUpTLS tests the TLS setup
-// func TestServerSetupImpl_SetUpTLS(t *testing.T) {
-// 	setup := &ServerSetupImpl{}
+func TestServerConfigValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  ServerConfig
+		wantErr bool
+	}{
+		{
+			name: "valid config",
+			config: ServerConfig{
+				Port:           8080,
+				RequestTimeout: 10 * time.Second,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid port",
+			config: ServerConfig{
+				Port:           0,
+				RequestTimeout: 10 * time.Second,
+			},
+			wantErr: true,
+		},
+		{
+			name: "TLS missing files",
+			config: ServerConfig{
+				Port:           8080,
+				UseTLS:         true,
+				RequestTimeout: 10 * time.Second,
+			},
+			wantErr: true,
+		},
+	}
 
-// 	// Create temporary cert and key files for testing
-// 	tempDir := t.TempDir()
-// 	certFile := filepath.Join(tempDir, "cert.pem")
-// 	keyFile := filepath.Join(tempDir, "key.pem")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.config.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
 
-// 	// Write dummy cert and key files
-// 	err := os.WriteFile(certFile, []byte("dummy cert"), 0644)
-// 	require.NoError(t, err)
-// 	err = os.WriteFile(keyFile, []byte("dummy key"), 0644)
-// 	require.NoError(t, err)
+func TestPIDFileOperations(t *testing.T) {
+	tempDir := t.TempDir()
+	pidFile := filepath.Join(tempDir, "test.pid")
 
-// 	tests := []struct {
-// 		name      string
-// 		config    ServerConfig
-// 		wantTLS   bool
-// 		wantError bool
-// 	}{
-// 		{
-// 			name: "TLS disabled",
-// 			config: ServerConfig{
-// 				UseTLS: false,
-// 			},
-// 			wantTLS:   false,
-// 			wantError: false,
-// 		},
-// 		{
-// 			name: "TLS enabled with valid files",
-// 			config: ServerConfig{
-// 				UseTLS:      true,
-// 				TLSCertFile: certFile,
-// 				TLSKeyFile:  keyFile,
-// 			},
-// 			wantTLS:   true,
-// 			wantError: false,
-// 		},
-// 		{
-// 			name: "TLS enabled with missing cert file",
-// 			config: ServerConfig{
-// 				UseTLS:     true,
-// 				TLSKeyFile: keyFile,
-// 			},
-// 			wantTLS:   false,
-// 			wantError: true,
-// 		},
-// 	}
+	logger, _ := gourdianlogger.NewGourdianLoggerWithDefault()
+	defer logger.Close()
 
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			tlsConfig, err := setup.SetUpTLS(tt.config)
+	server := &GourdianGinServer{
+		config: ServerConfig{
+			PIDFile: pidFile,
+			Logger:  logger,
+		},
+	}
 
-// 			if tt.wantError {
-// 				assert.Error(t, err)
-// 				assert.Nil(t, tlsConfig)
-// 			} else {
-// 				assert.NoError(t, err)
-// 				if tt.wantTLS {
-// 					assert.NotNil(t, tlsConfig)
-// 					assert.NotEmpty(t, tlsConfig.Certificates)
-// 				} else {
-// 					assert.Nil(t, tlsConfig)
-// 				}
-// 			}
-// 		})
-// 	}
-// }
+	// Test create
+	if err := server.createPIDFile(); err != nil {
+		t.Fatalf("createPIDFile() failed: %v", err)
+	}
+
+	// Verify file exists
+	if _, err := os.Stat(pidFile); os.IsNotExist(err) {
+		t.Fatal("PID file was not created")
+	}
+
+	// Test remove
+	if err := server.removePIDFile(); err != nil {
+		t.Fatalf("removePIDFile() failed: %v", err)
+	}
+
+	// Verify file removed
+	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
+		t.Fatal("PID file was not removed")
+	}
+}
+
+func TestRequestTimeoutMiddleware(t *testing.T) {
+	config := ServerConfig{
+		RequestTimeout: 100 * time.Millisecond,
+	}
+
+	setup := &ServerSetupImpl{}
+	router := setup.SetUpRouter(config)
+
+	// Add a slow route
+	router.GET("/slow", func(c *gin.Context) {
+		time.Sleep(200 * time.Millisecond)
+		c.String(http.StatusOK, "too slow")
+	})
+
+	// Test the timeout
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/slow", nil)
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusGatewayTimeout {
+		t.Errorf("Expected status %d, got %d", http.StatusGatewayTimeout, w.Code)
+	}
+}
+
+func TestStopProcessFromPIDFile(t *testing.T) {
+	tempDir := t.TempDir()
+	pidFile := filepath.Join(tempDir, "test.pid")
+	nonexistentPidFile := filepath.Join(tempDir, "nonexistent.pid")
+
+	logger, _ := gourdianlogger.NewGourdianLoggerWithDefault()
+	defer logger.Close()
+
+	t.Run("Non-existent PID file", func(t *testing.T) {
+		err := StopProcessFromPIDFile(nonexistentPidFile, logger)
+		if err != nil {
+			t.Errorf("Expected no error for non-existent PID file, got: %v", err)
+		}
+	})
+
+	t.Run("Non-existent process", func(t *testing.T) {
+		// Use a PID that we know doesn't exist (max PID + 1)
+		maxPid := 1 << 22 // Common max PID on Linux systems
+		nonExistentPid := maxPid + 1
+		if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", nonExistentPid)), 0644); err != nil {
+			t.Fatalf("Failed to create test PID file: %v", err)
+		}
+
+		err := StopProcessFromPIDFile(pidFile, logger)
+		if err != nil {
+			t.Errorf("Expected no error for non-existent process, got: %v", err)
+		}
+
+		// Verify PID file was removed
+		if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
+			t.Error("PID file should have been removed")
+		}
+	})
+
+	t.Run("Invalid PID file content", func(t *testing.T) {
+		if err := os.WriteFile(pidFile, []byte("not-a-number"), 0644); err != nil {
+			t.Fatalf("Failed to create test PID file: %v", err)
+		}
+
+		err := StopProcessFromPIDFile(pidFile, logger)
+		if err == nil {
+			t.Error("Expected error for invalid PID content, got nil")
+		}
+	})
+}
+
+// TestServerSetupImpl_SetUpTLS tests the TLS setup
+func TestServerSetupImpl_SetUpTLS(t *testing.T) {
+	setup := &ServerSetupImpl{}
+
+	// Create temporary self-signed cert and key for testing
+	tempDir := t.TempDir()
+	certFile := filepath.Join(tempDir, "cert.pem")
+	keyFile := filepath.Join(tempDir, "key.pem")
+
+	// Generate a self-signed certificate for testing
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Test Org"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Hour),
+		KeyUsage:  x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageServerAuth,
+		},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	require.NoError(t, err)
+
+	// Write certificate
+	certOut, err := os.Create(certFile)
+	require.NoError(t, err)
+	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	certOut.Close()
+
+	// Write key
+	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	require.NoError(t, err)
+	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	keyOut.Close()
+
+	tests := []struct {
+		name      string
+		config    ServerConfig
+		wantTLS   bool
+		wantError bool
+	}{
+		{
+			name: "TLS disabled",
+			config: ServerConfig{
+				UseTLS: false,
+			},
+			wantTLS:   false,
+			wantError: false,
+		},
+		{
+			name: "TLS enabled with valid files",
+			config: ServerConfig{
+				UseTLS:      true,
+				TLSCertFile: certFile,
+				TLSKeyFile:  keyFile,
+			},
+			wantTLS:   true,
+			wantError: false,
+		},
+		{
+			name: "TLS enabled with missing cert file",
+			config: ServerConfig{
+				UseTLS:     true,
+				TLSKeyFile: keyFile,
+			},
+			wantTLS:   false,
+			wantError: true,
+		},
+		{
+			name: "TLS enabled with invalid cert file",
+			config: ServerConfig{
+				UseTLS:      true,
+				TLSCertFile: filepath.Join(tempDir, "invalid.pem"),
+				TLSKeyFile:  keyFile,
+			},
+			wantTLS:   false,
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tlsConfig, err := setup.SetUpTLS(tt.config)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				assert.Nil(t, tlsConfig)
+			} else {
+				assert.NoError(t, err)
+				if tt.wantTLS {
+					assert.NotNil(t, tlsConfig)
+					assert.NotEmpty(t, tlsConfig.Certificates)
+					assert.Equal(t, tls.VersionTLS12, tlsConfig.MinVersion)
+					assert.Len(t, tlsConfig.CipherSuites, 2)
+				} else {
+					assert.Nil(t, tlsConfig)
+				}
+			}
+		})
+	}
+}
 
 // // TestServerSetupImpl_SetUpCORS tests the CORS setup
 // func TestServerSetupImpl_SetUpCORS(t *testing.T) {

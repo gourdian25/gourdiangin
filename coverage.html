@@ -55,7 +55,7 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/gourdian25/gourdiangin/gourdiangin.go (48.4%)</option>
+				<option value="file0">github.com/gourdian25/gourdiangin/gourdiangin.go (54.0%)</option>
 				
 				</select>
 			</div>
@@ -188,18 +188,18 @@ func (gs *GourdianGinServer) createPIDFile() error <span class="cov8" title="1">
                 return nil
         }</span>
 
-        <span class="cov0" title="0">pid := os.Getpid()
+        <span class="cov8" title="1">pid := os.Getpid()
         pidDir := filepath.Dir(gs.config.PIDFile)
 
         if err := os.MkdirAll(pidDir, 0755); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to create PID directory: %w", err)
         }</span>
 
-        <span class="cov0" title="0">if err := os.WriteFile(gs.config.PIDFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if err := os.WriteFile(gs.config.PIDFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to create PID file: %w", err)
         }</span>
 
-        <span class="cov0" title="0">gs.config.Logger.Infof("Created PID file at %s with PID %d", gs.config.PIDFile, pid)
+        <span class="cov8" title="1">gs.config.Logger.Infof("Created PID file at %s with PID %d", gs.config.PIDFile, pid)
         return nil</span>
 }
 
@@ -208,11 +208,11 @@ func (gs *GourdianGinServer) removePIDFile() error <span class="cov8" title="1">
                 return nil
         }</span>
 
-        <span class="cov0" title="0">if err := os.Remove(gs.config.PIDFile); err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if err := os.Remove(gs.config.PIDFile); err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov0" title="0">{
                 return fmt.Errorf("failed to remove PID file: %w", err)
         }</span>
 
-        <span class="cov0" title="0">gs.config.Logger.Infof("Removed PID file at %s", gs.config.PIDFile)
+        <span class="cov8" title="1">gs.config.Logger.Infof("Removed PID file at %s", gs.config.PIDFile)
         return nil</span>
 }
 
