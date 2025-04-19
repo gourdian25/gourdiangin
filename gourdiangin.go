@@ -35,7 +35,6 @@ type ServerConfig struct {
 	RequestTimeout  time.Duration
 }
 
-// Validate checks if the ServerConfig fields are valid.
 func (c ServerConfig) Validate() error {
 	if c.Port < 1 || c.Port > 65535 {
 		return fmt.Errorf("invalid port number: %d", c.Port)
@@ -49,7 +48,6 @@ func (c ServerConfig) Validate() error {
 	return nil
 }
 
-// Server defines the interface for the HTTP server
 type Server interface {
 	Start() error
 	GracefulShutdown()
@@ -67,22 +65,19 @@ type GourdianGinServer struct {
 }
 
 func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
-	// Initialize a default logger if none provided
 	if config.Logger == nil {
-		Logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
+		logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to create default logger: %v", err))
 		}
-		defer Logger.Close()
-		config.Logger = Logger
+		defer logger.Close()
+		config.Logger = logger
 	}
 
-	// Validate configuration
 	if err := config.Validate(); err != nil {
 		config.Logger.Fatalf("Invalid server configuration: %v", err)
 	}
 
-	// Check port availability
 	if err := setup.CheckPortAvailability(config); err != nil {
 		config.Logger.Fatalf("%v", err)
 	}
@@ -101,7 +96,6 @@ func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
 	}
 	server.TLSConfig = tlsConfig
 
-	// Create stop channel for shutdown signals
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
@@ -118,21 +112,18 @@ func (gs *GourdianGinServer) GetServer() *http.Server {
 	return gs.server
 }
 
-// createPIDFile creates a PID file with the current process ID
 func (gs *GourdianGinServer) createPIDFile() error {
 	if gs.config.PIDFile == "" {
-		return nil // No PID file configured
+		return nil
 	}
 
 	pid := os.Getpid()
 	pidDir := filepath.Dir(gs.config.PIDFile)
 
-	// Ensure the directory exists
 	if err := os.MkdirAll(pidDir, 0755); err != nil {
 		return fmt.Errorf("failed to create PID directory: %w", err)
 	}
 
-	// Write the PID to the file
 	if err := os.WriteFile(gs.config.PIDFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
@@ -141,10 +132,9 @@ func (gs *GourdianGinServer) createPIDFile() error {
 	return nil
 }
 
-// removePIDFile removes the PID file if it exists
 func (gs *GourdianGinServer) removePIDFile() error {
 	if gs.config.PIDFile == "" {
-		return nil // No PID file configured
+		return nil
 	}
 
 	if err := os.Remove(gs.config.PIDFile); err != nil && !os.IsNotExist(err) {
@@ -155,14 +145,12 @@ func (gs *GourdianGinServer) removePIDFile() error {
 	return nil
 }
 
-// StopProcessFromPIDFile stops a process using the PID from a file
 func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error {
 	if logger == nil {
 		logger, _ = gourdianlogger.NewGourdianLoggerWithDefault()
 		defer logger.Close()
 	}
 
-	// Read the PID from the PID file
 	pidData, err := os.ReadFile(pidFile)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -177,25 +165,20 @@ func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error
 		return fmt.Errorf("failed to parse PID: %w", err)
 	}
 
-	// Check if the process exists
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		// On Unix systems, FindProcess always succeeds, but on Windows it might fail
 		logger.Warnf("Process %d not found (may already be terminated)", pid)
-		// Remove the stale PID file
 		if removeErr := os.Remove(pidFile); removeErr != nil && !os.IsNotExist(removeErr) {
 			logger.Errorf("Failed to remove stale PID file: %v", removeErr)
 		}
 		return nil
 	}
 
-	// Send SIGTERM to the process
 	logger.Infof("Sending SIGTERM to process %d", pid)
 	if err := process.Signal(syscall.SIGTERM); err != nil {
 		if err.Error() == "os: process already finished" ||
 			strings.Contains(err.Error(), "no such process") {
 			logger.Warnf("Process %d is already terminated", pid)
-			// Remove the stale PID file
 			if removeErr := os.Remove(pidFile); removeErr != nil && !os.IsNotExist(removeErr) {
 				logger.Errorf("Failed to remove stale PID file: %v", removeErr)
 			}
@@ -204,7 +187,6 @@ func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error
 		return fmt.Errorf("failed to send SIGTERM to process: %w", err)
 	}
 
-	// Wait for the process to exit (non-blocking check)
 	done := make(chan error, 1)
 	go func() {
 		_, err := process.Wait()
@@ -214,7 +196,6 @@ func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error
 	select {
 	case err := <-done:
 		if err != nil {
-			// Check if the error is because the process is already gone
 			if strings.Contains(err.Error(), "no child processes") {
 				logger.Warnf("Process %d already terminated", pid)
 			} else {
@@ -225,7 +206,6 @@ func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error
 		logger.Warnf("Timeout waiting for process %d to terminate", pid)
 	}
 
-	// Remove the PID file
 	if err := os.Remove(pidFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove PID file: %w", err)
 	}
@@ -238,7 +218,6 @@ func (gs *GourdianGinServer) Start() error {
 	gs.shutdownWg.Add(1)
 	defer gs.shutdownWg.Done()
 
-	// Create PID file
 	if err := gs.createPIDFile(); err != nil {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
@@ -246,18 +225,17 @@ func (gs *GourdianGinServer) Start() error {
 
 	serverErr := make(chan error, 1)
 	go func() {
+		var err error
 		if gs.config.UseTLS {
 			gs.config.Logger.Infof("Starting server on port %d with TLS", gs.config.Port)
-			if err := gs.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-				gs.config.Logger.Errorf("Server error: %v", err)
-				serverErr <- err
-			}
+			err = gs.server.ListenAndServeTLS("", "")
 		} else {
 			gs.config.Logger.Infof("Starting server on port %d without TLS", gs.config.Port)
-			if err := gs.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				gs.config.Logger.Errorf("Server error: %v", err)
-				serverErr <- err
-			}
+			err = gs.server.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
+			gs.config.Logger.Errorf("Server error: %v", err)
+			serverErr <- err
 		}
 	}()
 
@@ -273,10 +251,9 @@ func (gs *GourdianGinServer) Start() error {
 func (gs *GourdianGinServer) shutdown() error {
 	gs.config.Logger.Info("Shutting down server...")
 
-	// Use configurable timeout
 	timeout := gs.config.ShutdownTimeout
 	if timeout == 0 {
-		timeout = 30 * time.Second // Default timeout
+		timeout = 30 * time.Second
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -302,7 +279,6 @@ func (gs *GourdianGinServer) GracefulShutdown() {
 		gs.config.Logger.Warn("Failed to send shutdown signal: stopChan may be closed")
 	}
 
-	// Wait for shutdown to complete
 	done := make(chan struct{})
 	go func() {
 		gs.shutdownWg.Wait()
@@ -312,7 +288,7 @@ func (gs *GourdianGinServer) GracefulShutdown() {
 	select {
 	case <-done:
 		gs.config.Logger.Info("Server shutdown completed")
-	case <-time.After(gs.config.ShutdownTimeout + 5*time.Second): // Add buffer for safety
+	case <-time.After(gs.config.ShutdownTimeout + 5*time.Second):
 		gs.config.Logger.Error("Server shutdown timed out")
 	}
 }
@@ -324,34 +300,23 @@ type ServerSetup interface {
 	CheckPortAvailability(config ServerConfig) error
 }
 
-// ServerSetupImpl provides the standard implementation of the ServerSetup interface.
 type ServerSetupImpl struct{}
 
 func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *gin.Engine {
 	router := gin.Default()
-
-	// Add timeout middleware if RequestTimeout is set
 	if config.RequestTimeout > 0 {
-		router.Use(timeoutMiddleware(config))
+		router.Use(timeout.New(
+			timeout.WithTimeout(config.RequestTimeout),
+			timeout.WithHandler(func(c *gin.Context) { c.Next() }),
+			timeout.WithResponse(func(c *gin.Context) {
+				c.AbortWithStatusJSON(http.StatusGatewayTimeout, gin.H{
+					"request_id": c.Writer.Header().Get("X-Request-ID"),
+					"error":      "request timeout",
+				})
+			}),
+		))
 	}
-
 	return router
-}
-
-// timeoutMiddleware adds per-request timeout
-func timeoutMiddleware(config ServerConfig) gin.HandlerFunc {
-	return timeout.New(
-		timeout.WithTimeout(config.RequestTimeout),
-		timeout.WithHandler(func(c *gin.Context) {
-			c.Next()
-		}),
-		timeout.WithResponse(func(c *gin.Context) {
-			c.AbortWithStatusJSON(http.StatusGatewayTimeout, gin.H{
-				"request_id": c.Writer.Header().Get("X-Request-ID"),
-				"error":      "request timeout",
-			})
-		}),
-	)
 }
 
 func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
@@ -371,16 +336,15 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 		return nil, fmt.Errorf("failed to load TLS certificate: %w", err)
 	}
 
-	tlsConfig := &tls.Config{
+	return &tls.Config{
 		Certificates:             []tls.Certificate{cert},
-		MinVersion:               tls.VersionTLS12, // Enforce minimum TLS version
-		PreferServerCipherSuites: true,             // Prefer server cipher suites for better security
+		MinVersion:               tls.VersionTLS12,
+		PreferServerCipherSuites: true,
 		CipherSuites: []uint16{
 			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
 		},
-	}
-	return tlsConfig, nil
+	}, nil
 }
 
 func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) {
@@ -397,13 +361,12 @@ func (s *ServerSetupImpl) CheckPortAvailability(config ServerConfig) error {
 	var listener net.Listener
 	var err error
 
-	// Retry binding up to 3 times
 	for i := 0; i < 3; i++ {
 		listener, err = net.Listen("tcp", address)
 		if err == nil {
 			break
 		}
-		time.Sleep(1 * time.Second) // Wait before retrying
+		time.Sleep(1 * time.Second)
 	}
 
 	if err != nil {
@@ -418,14 +381,4 @@ func (s *ServerSetupImpl) CheckPortAvailability(config ServerConfig) error {
 		config.Logger.Infof("Port %d is available", config.Port)
 	}
 	return nil
-}
-func (s *ServerSetupImpl) SetUpHealthCheck(router *gin.Engine, config ServerConfig) {
-	// Health check endpoint
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
-	})
-
-	if config.Logger != nil {
-		config.Logger.Info("Health check endpoint /health is set up")
-	}
 }

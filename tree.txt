@@ -1,0 +1,17 @@
+.
+├── LICENSE
+├── Makefile
+├── Readme.md
+├── coverage.html
+├── coverage.out
+├── example2
+│   └── main.go
+├── examples
+│   └── main.go
+├── go.mod
+├── go.sum
+├── gourdiangin.go
+├── gourdiangin_test.go
+└── tree.txt
+
+3 directories, 12 files

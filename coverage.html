@@ -1,0 +1,487 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>gourdiangin: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/gourdian25/gourdiangin/gourdiangin.go (48.4%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package gourdiangin
+
+import (
+        "context"
+        "crypto/tls"
+        "errors"
+        "fmt"
+        "net"
+        "net/http"
+        "os"
+        "os/signal"
+        "path/filepath"
+        "strconv"
+        "strings"
+        "sync"
+        "syscall"
+        "time"
+
+        "github.com/gin-contrib/cors"
+        "github.com/gin-contrib/timeout"
+        "github.com/gin-gonic/gin"
+        "github.com/gourdian25/gourdianlogger"
+)
+
+type ServerConfig struct {
+        Port            int
+        UseTLS          bool
+        UseCORS         bool
+        TLSKeyFile      string
+        TLSCertFile     string
+        PIDFile         string
+        CORSConfig      cors.Config
+        Logger          *gourdianlogger.Logger
+        ShutdownTimeout time.Duration
+        RequestTimeout  time.Duration
+}
+
+func (c ServerConfig) Validate() error <span class="cov8" title="1">{
+        if c.Port &lt; 1 || c.Port &gt; 65535 </span><span class="cov8" title="1">{
+                return fmt.Errorf("invalid port number: %d", c.Port)
+        }</span>
+        <span class="cov8" title="1">if c.UseTLS &amp;&amp; (c.TLSCertFile == "" || c.TLSKeyFile == "") </span><span class="cov8" title="1">{
+                return errors.New("TLS certificate and key files must be provided when UseTLS is true")
+        }</span>
+        <span class="cov8" title="1">if c.RequestTimeout &lt;= 0 </span><span class="cov8" title="1">{
+                return errors.New("request timeout must be greater than 0")
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+type Server interface {
+        Start() error
+        GracefulShutdown()
+        GetRouter() *gin.Engine
+        GetServer() *http.Server
+}
+
+type GourdianGinServer struct {
+        router      *gin.Engine
+        server      *http.Server
+        serverSetup ServerSetup
+        config      ServerConfig
+        shutdownWg  sync.WaitGroup
+        stopChan    chan os.Signal
+}
+
+func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server <span class="cov8" title="1">{
+        if config.Logger == nil </span><span class="cov8" title="1">{
+                logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
+                if err != nil </span><span class="cov0" title="0">{
+                        panic(fmt.Sprintf("Failed to create default logger: %v", err))</span>
+                }
+                <span class="cov8" title="1">defer logger.Close()
+                config.Logger = logger</span>
+        }
+
+        <span class="cov8" title="1">if err := config.Validate(); err != nil </span><span class="cov0" title="0">{
+                config.Logger.Fatalf("Invalid server configuration: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">if err := setup.CheckPortAvailability(config); err != nil </span><span class="cov0" title="0">{
+                config.Logger.Fatalf("%v", err)
+        }</span>
+
+        <span class="cov8" title="1">router := setup.SetUpRouter(config)
+        setup.SetUpCORS(router, config)
+
+        server := &amp;http.Server{
+                Addr:    fmt.Sprintf(":%d", config.Port),
+                Handler: router,
+        }
+
+        tlsConfig, err := setup.SetUpTLS(config)
+        if err != nil </span><span class="cov0" title="0">{
+                config.Logger.Fatalf("Error setting up TLS: %v", err)
+        }</span>
+        <span class="cov8" title="1">server.TLSConfig = tlsConfig
+
+        stopChan := make(chan os.Signal, 1)
+        signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
+
+        return &amp;GourdianGinServer{
+                router:      router,
+                server:      server,
+                serverSetup: setup,
+                config:      config,
+                stopChan:    stopChan,
+        }</span>
+}
+
+func (gs *GourdianGinServer) GetServer() *http.Server <span class="cov0" title="0">{
+        return gs.server
+}</span>
+
+func (gs *GourdianGinServer) createPIDFile() error <span class="cov8" title="1">{
+        if gs.config.PIDFile == "" </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">pid := os.Getpid()
+        pidDir := filepath.Dir(gs.config.PIDFile)
+
+        if err := os.MkdirAll(pidDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create PID directory: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if err := os.WriteFile(gs.config.PIDFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create PID file: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">gs.config.Logger.Infof("Created PID file at %s with PID %d", gs.config.PIDFile, pid)
+        return nil</span>
+}
+
+func (gs *GourdianGinServer) removePIDFile() error <span class="cov8" title="1">{
+        if gs.config.PIDFile == "" </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">if err := os.Remove(gs.config.PIDFile); err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to remove PID file: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">gs.config.Logger.Infof("Removed PID file at %s", gs.config.PIDFile)
+        return nil</span>
+}
+
+func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error <span class="cov0" title="0">{
+        if logger == nil </span><span class="cov0" title="0">{
+                logger, _ = gourdianlogger.NewGourdianLoggerWithDefault()
+                defer logger.Close()
+        }</span>
+
+        <span class="cov0" title="0">pidData, err := os.ReadFile(pidFile)
+        if err != nil </span><span class="cov0" title="0">{
+                if os.IsNotExist(err) </span><span class="cov0" title="0">{
+                        logger.Warnf("PID file (%s) does not exist; server may not be running", pidFile)
+                        return nil
+                }</span>
+                <span class="cov0" title="0">return fmt.Errorf("failed to read PID file (%s): %w", pidFile, err)</span>
+        }
+
+        <span class="cov0" title="0">pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to parse PID: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">process, err := os.FindProcess(pid)
+        if err != nil </span><span class="cov0" title="0">{
+                logger.Warnf("Process %d not found (may already be terminated)", pid)
+                if removeErr := os.Remove(pidFile); removeErr != nil &amp;&amp; !os.IsNotExist(removeErr) </span><span class="cov0" title="0">{
+                        logger.Errorf("Failed to remove stale PID file: %v", removeErr)
+                }</span>
+                <span class="cov0" title="0">return nil</span>
+        }
+
+        <span class="cov0" title="0">logger.Infof("Sending SIGTERM to process %d", pid)
+        if err := process.Signal(syscall.SIGTERM); err != nil </span><span class="cov0" title="0">{
+                if err.Error() == "os: process already finished" ||
+                        strings.Contains(err.Error(), "no such process") </span><span class="cov0" title="0">{
+                        logger.Warnf("Process %d is already terminated", pid)
+                        if removeErr := os.Remove(pidFile); removeErr != nil &amp;&amp; !os.IsNotExist(removeErr) </span><span class="cov0" title="0">{
+                                logger.Errorf("Failed to remove stale PID file: %v", removeErr)
+                        }</span>
+                        <span class="cov0" title="0">return nil</span>
+                }
+                <span class="cov0" title="0">return fmt.Errorf("failed to send SIGTERM to process: %w", err)</span>
+        }
+
+        <span class="cov0" title="0">done := make(chan error, 1)
+        go func() </span><span class="cov0" title="0">{
+                _, err := process.Wait()
+                done &lt;- err
+        }</span>()
+
+        <span class="cov0" title="0">select </span>{
+        case err := &lt;-done:<span class="cov0" title="0">
+                if err != nil </span><span class="cov0" title="0">{
+                        if strings.Contains(err.Error(), "no child processes") </span><span class="cov0" title="0">{
+                                logger.Warnf("Process %d already terminated", pid)
+                        }</span> else<span class="cov0" title="0"> {
+                                logger.Warnf("Process wait returned error: %v", err)
+                        }</span>
+                }
+        case &lt;-time.After(5 * time.Second):<span class="cov0" title="0">
+                logger.Warnf("Timeout waiting for process %d to terminate", pid)</span>
+        }
+
+        <span class="cov0" title="0">if err := os.Remove(pidFile); err != nil &amp;&amp; !os.IsNotExist(err) </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to remove PID file: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">logger.Infof("Successfully stopped process %d", pid)
+        return nil</span>
+}
+
+func (gs *GourdianGinServer) Start() error <span class="cov8" title="1">{
+        gs.shutdownWg.Add(1)
+        defer gs.shutdownWg.Done()
+
+        if err := gs.createPIDFile(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create PID file: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer gs.removePIDFile()
+
+        serverErr := make(chan error, 1)
+        go func() </span><span class="cov8" title="1">{
+                var err error
+                if gs.config.UseTLS </span><span class="cov0" title="0">{
+                        gs.config.Logger.Infof("Starting server on port %d with TLS", gs.config.Port)
+                        err = gs.server.ListenAndServeTLS("", "")
+                }</span> else<span class="cov8" title="1"> {
+                        gs.config.Logger.Infof("Starting server on port %d without TLS", gs.config.Port)
+                        err = gs.server.ListenAndServe()
+                }</span>
+                <span class="cov8" title="1">if err != nil &amp;&amp; err != http.ErrServerClosed </span><span class="cov0" title="0">{
+                        gs.config.Logger.Errorf("Server error: %v", err)
+                        serverErr &lt;- err
+                }</span>
+        }()
+
+        <span class="cov8" title="1">select </span>{
+        case err := &lt;-serverErr:<span class="cov0" title="0">
+                return fmt.Errorf("server error: %w", err)</span>
+        case &lt;-gs.stopChan:<span class="cov8" title="1">
+                gs.config.Logger.Info("Received shutdown signal")
+                return gs.shutdown()</span>
+        }
+}
+
+func (gs *GourdianGinServer) shutdown() error <span class="cov8" title="1">{
+        gs.config.Logger.Info("Shutting down server...")
+
+        timeout := gs.config.ShutdownTimeout
+        if timeout == 0 </span><span class="cov0" title="0">{
+                timeout = 30 * time.Second
+        }</span>
+
+        <span class="cov8" title="1">ctx, cancel := context.WithTimeout(context.Background(), timeout)
+        defer cancel()
+
+        if err := gs.server.Shutdown(ctx); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("server forced to shutdown: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">gs.config.Logger.Info("Server shutdown complete")
+        return nil</span>
+}
+
+func (gs *GourdianGinServer) GetRouter() *gin.Engine <span class="cov0" title="0">{
+        return gs.router
+}</span>
+
+func (gs *GourdianGinServer) GracefulShutdown() <span class="cov8" title="1">{
+        select </span>{
+        case gs.stopChan &lt;- syscall.SIGTERM:<span class="cov8" title="1">
+                gs.config.Logger.Info("SIGTERM signal sent to server")</span>
+        case &lt;-time.After(1 * time.Second):<span class="cov0" title="0">
+                gs.config.Logger.Warn("Failed to send shutdown signal: stopChan may be closed")</span>
+        }
+
+        <span class="cov8" title="1">done := make(chan struct{})
+        go func() </span><span class="cov8" title="1">{
+                gs.shutdownWg.Wait()
+                close(done)
+        }</span>()
+
+        <span class="cov8" title="1">select </span>{
+        case &lt;-done:<span class="cov8" title="1">
+                gs.config.Logger.Info("Server shutdown completed")</span>
+        case &lt;-time.After(gs.config.ShutdownTimeout + 5*time.Second):<span class="cov0" title="0">
+                gs.config.Logger.Error("Server shutdown timed out")</span>
+        }
+}
+
+type ServerSetup interface {
+        SetUpRouter(config ServerConfig) *gin.Engine
+        SetUpTLS(config ServerConfig) (*tls.Config, error)
+        SetUpCORS(router *gin.Engine, config ServerConfig)
+        CheckPortAvailability(config ServerConfig) error
+}
+
+type ServerSetupImpl struct{}
+
+func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *gin.Engine <span class="cov8" title="1">{
+        router := gin.Default()
+        if config.RequestTimeout &gt; 0 </span><span class="cov8" title="1">{
+                router.Use(timeout.New(
+                        timeout.WithTimeout(config.RequestTimeout),
+                        timeout.WithHandler(func(c *gin.Context) </span><span class="cov8" title="1">{ c.Next() }</span>),
+                        timeout.WithResponse(func(c *gin.Context) <span class="cov8" title="1">{
+                                c.AbortWithStatusJSON(http.StatusGatewayTimeout, gin.H{
+                                        "request_id": c.Writer.Header().Get("X-Request-ID"),
+                                        "error":      "request timeout",
+                                })
+                        }</span>),
+                ))
+        }
+        <span class="cov8" title="1">return router</span>
+}
+
+func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) <span class="cov8" title="1">{
+        if !config.UseTLS </span><span class="cov8" title="1">{
+                return nil, nil
+        }</span>
+
+        <span class="cov0" title="0">if config.TLSCertFile == "" || config.TLSKeyFile == "" </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("TLS certificate and key files must be provided when UseTLS is true")
+        }</span>
+
+        <span class="cov0" title="0">cert, err := tls.LoadX509KeyPair(config.TLSCertFile, config.TLSKeyFile)
+        if err != nil </span><span class="cov0" title="0">{
+                if config.Logger != nil </span><span class="cov0" title="0">{
+                        config.Logger.Errorf("Failed to load TLS certificate: %v", err)
+                }</span>
+                <span class="cov0" title="0">return nil, fmt.Errorf("failed to load TLS certificate: %w", err)</span>
+        }
+
+        <span class="cov0" title="0">return &amp;tls.Config{
+                Certificates:             []tls.Certificate{cert},
+                MinVersion:               tls.VersionTLS12,
+                PreferServerCipherSuites: true,
+                CipherSuites: []uint16{
+                        tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                        tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+                },
+        }, nil</span>
+}
+
+func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) <span class="cov8" title="1">{
+        if config.UseCORS </span><span class="cov0" title="0">{
+                router.Use(cors.New(config.CORSConfig))
+                if config.Logger != nil </span><span class="cov0" title="0">{
+                        config.Logger.Infof("CORS configured with settings: %+v", config.CORSConfig)
+                }</span>
+        }
+}
+
+func (s *ServerSetupImpl) CheckPortAvailability(config ServerConfig) error <span class="cov8" title="1">{
+        address := fmt.Sprintf(":%d", config.Port)
+        var listener net.Listener
+        var err error
+
+        for i := 0; i &lt; 3; i++ </span><span class="cov8" title="1">{
+                listener, err = net.Listen("tcp", address)
+                if err == nil </span><span class="cov8" title="1">{
+                        break</span>
+                }
+                <span class="cov0" title="0">time.Sleep(1 * time.Second)</span>
+        }
+
+        <span class="cov8" title="1">if err != nil </span><span class="cov0" title="0">{
+                if strings.Contains(err.Error(), "bind: address already in use") </span><span class="cov0" title="0">{
+                        return fmt.Errorf("port %d is already in use; please choose a different port or stop the process using this port", config.Port)
+                }</span>
+                <span class="cov0" title="0">return fmt.Errorf("failed to check port availability: %w", err)</span>
+        }
+
+        <span class="cov8" title="1">listener.Close()
+        if config.Logger != nil </span><span class="cov8" title="1">{
+                config.Logger.Infof("Port %d is available", config.Port)
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
