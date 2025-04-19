@@ -55,7 +55,7 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/gourdian25/gourdiangin/gourdiangin.go (54.0%)</option>
+				<option value="file0">github.com/gourdian25/gourdiangin/gourdiangin.go (70.2%)</option>
 				
 				</select>
 			</div>
@@ -216,27 +216,27 @@ func (gs *GourdianGinServer) removePIDFile() error <span class="cov8" title="1">
         return nil</span>
 }
 
-func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error <span class="cov0" title="0">{
+func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error <span class="cov8" title="1">{
         if logger == nil </span><span class="cov0" title="0">{
                 logger, _ = gourdianlogger.NewGourdianLoggerWithDefault()
                 defer logger.Close()
         }</span>
 
-        <span class="cov0" title="0">pidData, err := os.ReadFile(pidFile)
-        if err != nil </span><span class="cov0" title="0">{
-                if os.IsNotExist(err) </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">pidData, err := os.ReadFile(pidFile)
+        if err != nil </span><span class="cov8" title="1">{
+                if os.IsNotExist(err) </span><span class="cov8" title="1">{
                         logger.Warnf("PID file (%s) does not exist; server may not be running", pidFile)
                         return nil
                 }</span>
                 <span class="cov0" title="0">return fmt.Errorf("failed to read PID file (%s): %w", pidFile, err)</span>
         }
 
-        <span class="cov0" title="0">pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
-        if err != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+        if err != nil </span><span class="cov8" title="1">{
                 return fmt.Errorf("failed to parse PID: %w", err)
         }</span>
 
-        <span class="cov0" title="0">process, err := os.FindProcess(pid)
+        <span class="cov8" title="1">process, err := os.FindProcess(pid)
         if err != nil </span><span class="cov0" title="0">{
                 logger.Warnf("Process %d not found (may already be terminated)", pid)
                 if removeErr := os.Remove(pidFile); removeErr != nil &amp;&amp; !os.IsNotExist(removeErr) </span><span class="cov0" title="0">{
@@ -245,15 +245,15 @@ func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error
                 <span class="cov0" title="0">return nil</span>
         }
 
-        <span class="cov0" title="0">logger.Infof("Sending SIGTERM to process %d", pid)
-        if err := process.Signal(syscall.SIGTERM); err != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">logger.Infof("Sending SIGTERM to process %d", pid)
+        if err := process.Signal(syscall.SIGTERM); err != nil </span><span class="cov8" title="1">{
                 if err.Error() == "os: process already finished" ||
-                        strings.Contains(err.Error(), "no such process") </span><span class="cov0" title="0">{
+                        strings.Contains(err.Error(), "no such process") </span><span class="cov8" title="1">{
                         logger.Warnf("Process %d is already terminated", pid)
                         if removeErr := os.Remove(pidFile); removeErr != nil &amp;&amp; !os.IsNotExist(removeErr) </span><span class="cov0" title="0">{
                                 logger.Errorf("Failed to remove stale PID file: %v", removeErr)
                         }</span>
-                        <span class="cov0" title="0">return nil</span>
+                        <span class="cov8" title="1">return nil</span>
                 }
                 <span class="cov0" title="0">return fmt.Errorf("failed to send SIGTERM to process: %w", err)</span>
         }
@@ -338,7 +338,7 @@ func (gs *GourdianGinServer) shutdown() error <span class="cov8" title="1">{
         return nil</span>
 }
 
-func (gs *GourdianGinServer) GetRouter() *gin.Engine <span class="cov0" title="0">{
+func (gs *GourdianGinServer) GetRouter() *gin.Engine <span class="cov8" title="1">{
         return gs.router
 }</span>
 
@@ -395,16 +395,16 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) <sp
                 return nil, nil
         }</span>
 
-        <span class="cov0" title="0">if config.TLSCertFile == "" || config.TLSKeyFile == "" </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">if config.TLSCertFile == "" || config.TLSKeyFile == "" </span><span class="cov8" title="1">{
                 return nil, fmt.Errorf("TLS certificate and key files must be provided when UseTLS is true")
         }</span>
 
-        <span class="cov0" title="0">cert, err := tls.LoadX509KeyPair(config.TLSCertFile, config.TLSKeyFile)
-        if err != nil </span><span class="cov0" title="0">{
+        <span class="cov8" title="1">cert, err := tls.LoadX509KeyPair(config.TLSCertFile, config.TLSKeyFile)
+        if err != nil </span><span class="cov8" title="1">{
                 if config.Logger != nil </span><span class="cov0" title="0">{
                         config.Logger.Errorf("Failed to load TLS certificate: %v", err)
                 }</span>
-                <span class="cov0" title="0">return nil, fmt.Errorf("failed to load TLS certificate: %w", err)</span>
+                <span class="cov8" title="1">return nil, fmt.Errorf("failed to load TLS certificate: %w", err)</span>
         }
 
         <span class="cov0" title="0">return &amp;tls.Config{
@@ -419,7 +419,7 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) <sp
 }
 
 func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) <span class="cov8" title="1">{
-        if config.UseCORS </span><span class="cov0" title="0">{
+        if config.UseCORS </span><span class="cov8" title="1">{
                 router.Use(cors.New(config.CORSConfig))
                 if config.Logger != nil </span><span class="cov0" title="0">{
                         config.Logger.Infof("CORS configured with settings: %+v", config.CORSConfig)

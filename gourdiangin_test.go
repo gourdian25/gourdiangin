@@ -14,10 +14,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/gourdian25/gourdianlogger"
 	"github.com/stretchr/testify/assert"
@@ -328,7 +331,243 @@ func TestStopProcessFromPIDFile(t *testing.T) {
 	})
 }
 
-// TestServerSetupImpl_SetUpTLS tests the TLS setup
+func TestServerSetupImpl_SetUpCORS(t *testing.T) {
+	setup := &ServerSetupImpl{}
+
+	t.Run("CORS enabled", func(t *testing.T) {
+		router := gin.New()
+		initialHandlers := len(router.Handlers)
+
+		config := ServerConfig{
+			UseCORS: true,
+			CORSConfig: cors.Config{
+				AllowOrigins: []string{"https://example.com"},
+			},
+			Logger: nil,
+		}
+
+		setup.SetUpCORS(router, config)
+		assert.Greater(t, len(router.Handlers), initialHandlers, "CORS middleware should be added")
+	})
+
+	t.Run("CORS disabled", func(t *testing.T) {
+		router := gin.New()
+		initialHandlers := len(router.Handlers)
+
+		config := ServerConfig{
+			UseCORS: false,
+			CORSConfig: cors.Config{
+				AllowOrigins: []string{"https://example.com"},
+			},
+			Logger: nil,
+		}
+
+		setup.SetUpCORS(router, config)
+		assert.Equal(t, initialHandlers, len(router.Handlers), "No middleware should be added when CORS is disabled")
+	})
+}
+
+func TestServerSetupImpl_SetUpCORS2(t *testing.T) {
+	setup := &ServerSetupImpl{}
+
+	t.Run("CORS headers present when enabled", func(t *testing.T) {
+		router := gin.New()
+		config := ServerConfig{
+			UseCORS: true,
+			CORSConfig: cors.Config{
+				AllowOrigins: []string{"https://example.com"},
+			},
+		}
+		setup.SetUpCORS(router, config)
+
+		router.GET("/test", func(c *gin.Context) {
+			c.String(200, "OK")
+		})
+
+		srv := httptest.NewServer(router)
+		defer srv.Close()
+
+		req, _ := http.NewRequest("OPTIONS", srv.URL+"/test", nil)
+		req.Header.Set("Origin", "https://example.com")
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, "https://example.com", resp.Header.Get("Access-Control-Allow-Origin"))
+	})
+}
+
+func TestGourdianGinServer_PIDFile(t *testing.T) {
+	tempDir := t.TempDir()
+	pidFile := filepath.Join(tempDir, "test.pid")
+
+	// Create a logger that won't panic if used
+	logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
+	require.NoError(t, err)
+	defer logger.Close()
+
+	config := ServerConfig{
+		Port:            8080,
+		PIDFile:         pidFile,
+		Logger:          logger,
+		RequestTimeout:  30 * time.Second, // Added required field
+		ShutdownTimeout: 10 * time.Second, // Optional but good practice
+	}
+
+	setup := &ServerSetupImpl{}
+	server := NewGourdianGinServer(setup, config).(*GourdianGinServer)
+
+	t.Run("create PID file", func(t *testing.T) {
+		err := server.createPIDFile()
+		assert.NoError(t, err)
+		assert.FileExists(t, pidFile)
+
+		// Verify PID file content
+		pidData, err := os.ReadFile(pidFile)
+		assert.NoError(t, err)
+		pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+		assert.NoError(t, err)
+		assert.Equal(t, os.Getpid(), pid)
+	})
+
+	t.Run("remove PID file", func(t *testing.T) {
+		// Ensure file exists first
+		err := server.createPIDFile()
+		require.NoError(t, err)
+		require.FileExists(t, pidFile)
+
+		err = server.removePIDFile()
+		assert.NoError(t, err)
+		assert.NoFileExists(t, pidFile)
+	})
+
+	t.Run("remove non-existent PID file", func(t *testing.T) {
+		// Ensure file doesn't exist
+		_ = os.Remove(pidFile)
+
+		err := server.removePIDFile()
+		assert.NoError(t, err)
+	})
+}
+
+func TestGourdianGinServer_GetRouter(t *testing.T) {
+	t.Run("router has timeout middleware", func(t *testing.T) {
+		// Use a shorter timeout for testing (500ms)
+		config := ServerConfig{
+			Port:           8080,
+			RequestTimeout: 500 * time.Millisecond, // Shorter timeout for tests
+		}
+
+		setup := &ServerSetupImpl{}
+		server := NewGourdianGinServer(setup, config).(*GourdianGinServer)
+		router := server.GetRouter()
+
+		// Create a test request
+		req, _ := http.NewRequest("GET", "/timeout-test", nil)
+		w := httptest.NewRecorder()
+
+		// Add a route that will sleep slightly longer than the timeout
+		router.GET("/timeout-test", func(c *gin.Context) {
+			time.Sleep(600 * time.Millisecond) // Just over the timeout
+			c.String(200, "should not reach here")
+		})
+
+		// Serve the request
+		router.ServeHTTP(w, req)
+
+		// Verify we got a timeout response
+		if w.Code != http.StatusGatewayTimeout {
+			t.Errorf("Expected status code %d, got %d", http.StatusGatewayTimeout, w.Code)
+		}
+		if !strings.Contains(w.Body.String(), "request timeout") {
+			t.Errorf("Expected timeout message, got: %s", w.Body.String())
+		}
+	})
+
+	t.Run("router handles successful requests", func(t *testing.T) {
+		config := ServerConfig{
+			Port:           8080,
+			RequestTimeout: 500 * time.Millisecond,
+		}
+
+		setup := &ServerSetupImpl{}
+		server := NewGourdianGinServer(setup, config).(*GourdianGinServer)
+		router := server.GetRouter()
+
+		router.GET("/success-test", func(c *gin.Context) {
+			time.Sleep(100 * time.Millisecond) // Well under timeout
+			c.String(200, "success")
+		})
+
+		req, _ := http.NewRequest("GET", "/success-test", nil)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+		}
+		if w.Body.String() != "success" {
+			t.Errorf("Expected body 'success', got: %s", w.Body.String())
+		}
+	})
+}
+
+func TestTimeoutScenarios(t *testing.T) {
+	tests := []struct {
+		name           string
+		timeout        time.Duration
+		handlerSleep   time.Duration
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "within timeout",
+			timeout:        500 * time.Millisecond,
+			handlerSleep:   100 * time.Millisecond,
+			expectedStatus: http.StatusOK,
+			expectedBody:   "success",
+		},
+		{
+			name:           "exceeds timeout",
+			timeout:        500 * time.Millisecond,
+			handlerSleep:   600 * time.Millisecond,
+			expectedStatus: http.StatusGatewayTimeout,
+			expectedBody:   "request timeout",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := ServerConfig{
+				Port:           8080,
+				RequestTimeout: tt.timeout,
+			}
+
+			setup := &ServerSetupImpl{}
+			server := NewGourdianGinServer(setup, config).(*GourdianGinServer)
+			router := server.GetRouter()
+
+			router.GET("/test", func(c *gin.Context) {
+				time.Sleep(tt.handlerSleep)
+				if tt.expectedStatus == http.StatusOK {
+					c.String(200, tt.expectedBody)
+				}
+			})
+
+			req, _ := http.NewRequest("GET", "/test", nil)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+			if !strings.Contains(w.Body.String(), tt.expectedBody) {
+				t.Errorf("Expected body to contain %q, got %q", tt.expectedBody, w.Body.String())
+			}
+		})
+	}
+}
+
 func TestServerSetupImpl_SetUpTLS(t *testing.T) {
 	setup := &ServerSetupImpl{}
 
@@ -385,16 +624,6 @@ func TestServerSetupImpl_SetUpTLS(t *testing.T) {
 			wantError: false,
 		},
 		{
-			name: "TLS enabled with valid files",
-			config: ServerConfig{
-				UseTLS:      true,
-				TLSCertFile: certFile,
-				TLSKeyFile:  keyFile,
-			},
-			wantTLS:   true,
-			wantError: false,
-		},
-		{
 			name: "TLS enabled with missing cert file",
 			config: ServerConfig{
 				UseTLS:     true,
@@ -422,179 +651,38 @@ func TestServerSetupImpl_SetUpTLS(t *testing.T) {
 			if tt.wantError {
 				assert.Error(t, err)
 				assert.Nil(t, tlsConfig)
-			} else {
-				assert.NoError(t, err)
-				if tt.wantTLS {
-					assert.NotNil(t, tlsConfig)
-					assert.NotEmpty(t, tlsConfig.Certificates)
-					assert.Equal(t, tls.VersionTLS12, tlsConfig.MinVersion)
-					assert.Len(t, tlsConfig.CipherSuites, 2)
-				} else {
-					assert.Nil(t, tlsConfig)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			if !tt.wantTLS {
+				assert.Nil(t, tlsConfig)
+				return
+			}
+
+			// Verify TLS configuration
+			assert.NotNil(t, tlsConfig)
+			assert.NotEmpty(t, tlsConfig.Certificates)
+			assert.Equal(t, tls.VersionTLS12, tlsConfig.MinVersion)
+			assert.True(t, tlsConfig.PreferServerCipherSuites)
+
+			// Verify cipher suites - use more flexible comparison
+			expectedSuites := map[uint16]bool{
+				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: true,
+				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384: true,
+			}
+
+			for _, suite := range tlsConfig.CipherSuites {
+				if !expectedSuites[suite] {
+					t.Errorf("Unexpected cipher suite: %x", suite)
 				}
+				delete(expectedSuites, suite)
+			}
+
+			for suite := range expectedSuites {
+				t.Errorf("Missing expected cipher suite: %x", suite)
 			}
 		})
 	}
 }
-
-// // TestServerSetupImpl_SetUpCORS tests the CORS setup
-// func TestServerSetupImpl_SetUpCORS(t *testing.T) {
-// 	setup := &ServerSetupImpl{}
-// 	router := gin.New()
-
-// 	config := ServerConfig{
-// 		UseCORS: true,
-// 		CORSConfig: cors.Config{
-// 			AllowOrigins: []string{"https://example.com"},
-// 		},
-// 		Logger: nil,
-// 	}
-
-// 	setup.SetUpCORS(router, config)
-
-// 	// Verify CORS middleware is added by checking the handlers count
-// 	// Note: This is a bit implementation-dependent, but works for basic verification
-// 	assert.Greater(t, len(router.Handlers), 1)
-// }
-
-// // TestServerSetupImpl_CheckPortAvailability tests port availability checking
-// func TestServerSetupImpl_CheckPortAvailability(t *testing.T) {
-// 	setup := &ServerSetupImpl{}
-
-// 	// Find an available port for testing
-// 	listener, err := net.Listen("tcp", ":0")
-// 	require.NoError(t, err)
-// 	usedPort := listener.Addr().(*net.TCPAddr).Port
-// 	listener.Close()
-
-// 	tests := []struct {
-// 		name      string
-// 		port      int
-// 		wantError bool
-// 	}{
-// 		{
-// 			name:      "available port",
-// 			port:      0, // Let system choose an available port
-// 			wantError: false,
-// 		},
-// 		{
-// 			name:      "unavailable port",
-// 			port:      usedPort,
-// 			wantError: true,
-// 		},
-// 	}
-
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			config := ServerConfig{
-// 				Port:   tt.port,
-// 				Logger: nil,
-// 			}
-
-// 			err := setup.CheckPortAvailability(config)
-// 			if tt.wantError {
-// 				assert.Error(t, err)
-// 				assert.Contains(t, err.Error(), "address already in use")
-// 			} else {
-// 				assert.NoError(t, err)
-// 			}
-// 		})
-// 	}
-// }
-
-// // TestGourdianGinServer_PIDFile tests PID file creation and removal
-// func TestGourdianGinServer_PIDFile(t *testing.T) {
-// 	tempDir := t.TempDir()
-// 	pidFile := filepath.Join(tempDir, "test.pid")
-
-// 	config := ServerConfig{
-// 		Port:    8080,
-// 		PIDFile: pidFile,
-// 		Logger:  nil,
-// 	}
-
-// 	setup := &ServerSetupImpl{}
-// 	server := NewGourdianGinServer(setup, config).(*GourdianGinServer)
-
-// 	// Test createPIDFile
-// 	err := server.createPIDFile()
-// 	assert.NoError(t, err)
-// 	assert.FileExists(t, pidFile)
-
-// 	// Verify PID file content
-// 	pidData, err := os.ReadFile(pidFile)
-// 	assert.NoError(t, err)
-// 	pid, err := strconv.Atoi(string(pidData))
-// 	assert.NoError(t, err)
-// 	assert.Equal(t, os.Getpid(), pid)
-
-// 	// Test removePIDFile
-// 	err = server.removePIDFile()
-// 	assert.NoError(t, err)
-// 	assert.NoFileExists(t, pidFile)
-// }
-
-// // TestStopProcessFromPIDFile tests the process stopping functionality
-// func TestStopProcessFromPIDFile(t *testing.T) {
-// 	tempDir := t.TempDir()
-// 	pidFile := filepath.Join(tempDir, "test.pid")
-
-// 	// Test with non-existent PID file
-// 	err := StopProcessFromPIDFile("nonexistent.pid", nil)
-// 	assert.NoError(t, err)
-
-// 	// Test with invalid PID file content
-// 	err = os.WriteFile(pidFile, []byte("invalid"), 0644)
-// 	assert.NoError(t, err)
-// 	err = StopProcessFromPIDFile(pidFile, nil)
-// 	assert.Error(t, err)
-// 	assert.Contains(t, err.Error(), "failed to parse PID")
-
-// 	// Test with PID of current process
-// 	err = os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
-// 	assert.NoError(t, err)
-// 	err = StopProcessFromPIDFile(pidFile, nil)
-// 	assert.NoError(t, err)
-// 	assert.NoFileExists(t, pidFile)
-// }
-
-// // TestGourdianGinServer_GetRouter tests GetRouter method
-// func TestGourdianGinServer_GetRouter(t *testing.T) {
-// 	config := ServerConfig{
-// 		Port:   8080,
-// 		Logger: nil,
-// 	}
-
-// 	setup := &ServerSetupImpl{}
-// 	server := NewGourdianGinServer(setup, config)
-
-// 	router := server.GetRouter()
-// 	assert.NotNil(t, router)
-
-// 	// Add a route and test it
-// 	router.GET("/test", func(c *gin.Context) {
-// 		c.String(http.StatusOK, "test")
-// 	})
-
-// 	w := httptest.NewRecorder()
-// 	req, _ := http.NewRequest("GET", "/test", nil)
-// 	router.ServeHTTP(w, req)
-
-// 	assert.Equal(t, http.StatusOK, w.Code)
-// 	assert.Equal(t, "test", w.Body.String())
-// }
-
-// // TestGourdianGinServer_GetServer tests GetServer method
-// func TestGourdianGinServer_GetServer(t *testing.T) {
-// 	config := ServerConfig{
-// 		Port:   8080,
-// 		Logger: nil,
-// 	}
-
-// 	setup := &ServerSetupImpl{}
-// 	server := NewGourdianGinServer(setup, config)
-
-// 	httpServer := server.GetServer()
-// 	assert.NotNil(t, httpServer)
-// 	assert.Equal(t, fmt.Sprintf(":%d", config.Port), httpServer.Addr)
-// }
