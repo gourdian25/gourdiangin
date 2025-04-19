@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -26,10 +28,11 @@ type ServerConfig struct {
 	UseCORS         bool
 	TLSKeyFile      string
 	TLSCertFile     string
+	PIDFile         string
 	CORSConfig      cors.Config
 	Logger          *gourdianlogger.Logger
 	ShutdownTimeout time.Duration
-	RequestTimeout  time.Duration // New field for per-request timeout
+	RequestTimeout  time.Duration
 }
 
 // Validate checks if the ServerConfig fields are valid.
@@ -115,9 +118,110 @@ func (gs *GourdianGinServer) GetServer() *http.Server {
 	return gs.server
 }
 
+// createPIDFile creates a PID file with the current process ID
+func (gs *GourdianGinServer) createPIDFile() error {
+	if gs.config.PIDFile == "" {
+		return nil // No PID file configured
+	}
+
+	pid := os.Getpid()
+	pidDir := filepath.Dir(gs.config.PIDFile)
+
+	// Ensure the directory exists
+	if err := os.MkdirAll(pidDir, 0755); err != nil {
+		return fmt.Errorf("failed to create PID directory: %w", err)
+	}
+
+	// Write the PID to the file
+	if err := os.WriteFile(gs.config.PIDFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
+		return fmt.Errorf("failed to create PID file: %w", err)
+	}
+
+	gs.config.Logger.Infof("Created PID file at %s with PID %d", gs.config.PIDFile, pid)
+	return nil
+}
+
+// removePIDFile removes the PID file if it exists
+func (gs *GourdianGinServer) removePIDFile() error {
+	if gs.config.PIDFile == "" {
+		return nil // No PID file configured
+	}
+
+	if err := os.Remove(gs.config.PIDFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove PID file: %w", err)
+	}
+
+	gs.config.Logger.Infof("Removed PID file at %s", gs.config.PIDFile)
+	return nil
+}
+
+// StopProcessFromPIDFile stops a process using the PID from a file
+func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error {
+	if logger == nil {
+		logger, _ = gourdianlogger.NewGourdianLoggerWithDefault()
+		defer logger.Close()
+	}
+
+	// Read the PID from the PID file
+	pidData, err := os.ReadFile(pidFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			logger.Warnf("PID file (%s) does not exist; server may not be running", pidFile)
+			return nil
+		}
+		return fmt.Errorf("failed to read PID file (%s): %w", pidFile, err)
+	}
+
+	pid, err := strconv.Atoi(strings.TrimSpace(string(pidData)))
+	if err != nil {
+		return fmt.Errorf("failed to parse PID: %w", err)
+	}
+
+	// Check if the process is still running
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return fmt.Errorf("failed to find process: %w", err)
+	}
+
+	// Send SIGTERM to the process
+	logger.Infof("Sending SIGTERM to process %d", pid)
+	err = process.Signal(syscall.SIGTERM)
+	if err != nil {
+		if err.Error() == "os: process already finished" {
+			logger.Warnf("Process %d is already terminated", pid)
+			// Remove the stale PID file
+			if err := os.Remove(pidFile); err != nil {
+				logger.Errorf("Failed to remove stale PID file: %v", err)
+			}
+			return nil
+		}
+		return fmt.Errorf("failed to send SIGTERM to process: %w", err)
+	}
+
+	// Wait for the process to exit
+	_, err = process.Wait()
+	if err != nil {
+		return fmt.Errorf("failed to wait for process: %w", err)
+	}
+
+	// Remove the PID file
+	if err := os.Remove(pidFile); err != nil {
+		return fmt.Errorf("failed to remove PID file: %w", err)
+	}
+
+	logger.Infof("Successfully stopped process %d", pid)
+	return nil
+}
+
 func (gs *GourdianGinServer) Start() error {
 	gs.shutdownWg.Add(1)
 	defer gs.shutdownWg.Done()
+
+	// Create PID file
+	if err := gs.createPIDFile(); err != nil {
+		return fmt.Errorf("failed to create PID file: %w", err)
+	}
+	defer gs.removePIDFile()
 
 	serverErr := make(chan error, 1)
 	go func() {
