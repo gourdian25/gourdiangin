@@ -177,35 +177,56 @@ func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error
 		return fmt.Errorf("failed to parse PID: %w", err)
 	}
 
-	// Check if the process is still running
+	// Check if the process exists
 	process, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("failed to find process: %w", err)
+		// On Unix systems, FindProcess always succeeds, but on Windows it might fail
+		logger.Warnf("Process %d not found (may already be terminated)", pid)
+		// Remove the stale PID file
+		if removeErr := os.Remove(pidFile); removeErr != nil && !os.IsNotExist(removeErr) {
+			logger.Errorf("Failed to remove stale PID file: %v", removeErr)
+		}
+		return nil
 	}
 
 	// Send SIGTERM to the process
 	logger.Infof("Sending SIGTERM to process %d", pid)
-	err = process.Signal(syscall.SIGTERM)
-	if err != nil {
-		if err.Error() == "os: process already finished" {
+	if err := process.Signal(syscall.SIGTERM); err != nil {
+		if err.Error() == "os: process already finished" ||
+			strings.Contains(err.Error(), "no such process") {
 			logger.Warnf("Process %d is already terminated", pid)
 			// Remove the stale PID file
-			if err := os.Remove(pidFile); err != nil {
-				logger.Errorf("Failed to remove stale PID file: %v", err)
+			if removeErr := os.Remove(pidFile); removeErr != nil && !os.IsNotExist(removeErr) {
+				logger.Errorf("Failed to remove stale PID file: %v", removeErr)
 			}
 			return nil
 		}
 		return fmt.Errorf("failed to send SIGTERM to process: %w", err)
 	}
 
-	// Wait for the process to exit
-	_, err = process.Wait()
-	if err != nil {
-		return fmt.Errorf("failed to wait for process: %w", err)
+	// Wait for the process to exit (non-blocking check)
+	done := make(chan error, 1)
+	go func() {
+		_, err := process.Wait()
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			// Check if the error is because the process is already gone
+			if strings.Contains(err.Error(), "no child processes") {
+				logger.Warnf("Process %d already terminated", pid)
+			} else {
+				logger.Warnf("Process wait returned error: %v", err)
+			}
+		}
+	case <-time.After(5 * time.Second):
+		logger.Warnf("Timeout waiting for process %d to terminate", pid)
 	}
 
 	// Remove the PID file
-	if err := os.Remove(pidFile); err != nil {
+	if err := os.Remove(pidFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove PID file: %w", err)
 	}
 
