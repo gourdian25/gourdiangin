@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/timeout"
 	"github.com/gin-gonic/gin"
 	"github.com/gourdian25/gourdianlogger"
 )
@@ -28,6 +29,7 @@ type ServerConfig struct {
 	CORSConfig      cors.Config
 	Logger          *gourdianlogger.Logger
 	ShutdownTimeout time.Duration
+	RequestTimeout  time.Duration // New field for per-request timeout
 }
 
 // Validate checks if the ServerConfig fields are valid.
@@ -38,16 +40,18 @@ func (c ServerConfig) Validate() error {
 	if c.UseTLS && (c.TLSCertFile == "" || c.TLSKeyFile == "") {
 		return errors.New("TLS certificate and key files must be provided when UseTLS is true")
 	}
-	if c.Logger == nil {
-		return errors.New("logger must be provided")
+	if c.RequestTimeout <= 0 {
+		return errors.New("request timeout must be greater than 0")
 	}
 	return nil
 }
 
+// Server defines the interface for the HTTP server
 type Server interface {
 	Start() error
 	GracefulShutdown()
 	GetRouter() *gin.Engine
+	GetServer() *http.Server
 }
 
 type GourdianGinServer struct {
@@ -60,8 +64,19 @@ type GourdianGinServer struct {
 }
 
 func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
+	// Initialize a default logger if none provided
 	if config.Logger == nil {
-		panic("Logger must be provided in ServerConfig")
+		Logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
+		if err != nil {
+			panic(fmt.Sprintf("Failed to create default logger: %v", err))
+		}
+		defer Logger.Close()
+		config.Logger = Logger
+	}
+
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		config.Logger.Fatalf("Invalid server configuration: %v", err)
 	}
 
 	// Check port availability
@@ -94,6 +109,10 @@ func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
 		config:      config,
 		stopChan:    stopChan,
 	}
+}
+
+func (gs *GourdianGinServer) GetServer() *http.Server {
+	return gs.server
 }
 
 func (gs *GourdianGinServer) Start() error {
@@ -185,8 +204,29 @@ type ServerSetupImpl struct{}
 
 func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *gin.Engine {
 	router := gin.Default()
-	// Add custom middleware or configurations here if needed
+
+	// Add timeout middleware if RequestTimeout is set
+	if config.RequestTimeout > 0 {
+		router.Use(timeoutMiddleware(config))
+	}
+
 	return router
+}
+
+// timeoutMiddleware adds per-request timeout
+func timeoutMiddleware(config ServerConfig) gin.HandlerFunc {
+	return timeout.New(
+		timeout.WithTimeout(config.RequestTimeout),
+		timeout.WithHandler(func(c *gin.Context) {
+			c.Next()
+		}),
+		timeout.WithResponse(func(c *gin.Context) {
+			c.AbortWithStatusJSON(http.StatusGatewayTimeout, gin.H{
+				"request_id": c.Writer.Header().Get("X-Request-ID"),
+				"error":      "request timeout",
+			})
+		}),
+	)
 }
 
 func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
@@ -200,7 +240,9 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 
 	cert, err := tls.LoadX509KeyPair(config.TLSCertFile, config.TLSKeyFile)
 	if err != nil {
-		config.Logger.Errorf("Failed to load TLS certificate: %v", err)
+		if config.Logger != nil {
+			config.Logger.Errorf("Failed to load TLS certificate: %v", err)
+		}
 		return nil, fmt.Errorf("failed to load TLS certificate: %w", err)
 	}
 
@@ -219,7 +261,9 @@ func (s *ServerSetupImpl) SetUpTLS(config ServerConfig) (*tls.Config, error) {
 func (s *ServerSetupImpl) SetUpCORS(router *gin.Engine, config ServerConfig) {
 	if config.UseCORS {
 		router.Use(cors.New(config.CORSConfig))
-		config.Logger.Infof("CORS configured with settings: %+v", config.CORSConfig)
+		if config.Logger != nil {
+			config.Logger.Infof("CORS configured with settings: %+v", config.CORSConfig)
+		}
 	}
 }
 
@@ -245,6 +289,18 @@ func (s *ServerSetupImpl) CheckPortAvailability(config ServerConfig) error {
 	}
 
 	listener.Close()
-	config.Logger.Infof("Port %d is available", config.Port)
+	if config.Logger != nil {
+		config.Logger.Infof("Port %d is available", config.Port)
+	}
 	return nil
+}
+func (s *ServerSetupImpl) SetUpHealthCheck(router *gin.Engine, config ServerConfig) {
+	// Health check endpoint
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+	})
+
+	if config.Logger != nil {
+		config.Logger.Info("Health check endpoint /health is set up")
+	}
 }
