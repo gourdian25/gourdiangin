@@ -60,8 +60,8 @@ type GourdianGinServer struct {
 }
 
 func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
-	if err := config.Validate(); err != nil {
-		panic(fmt.Sprintf("Invalid server configuration: %v", err))
+	if config.Logger == nil {
+		panic("Logger must be provided in ServerConfig")
 	}
 
 	// Check port availability
@@ -102,15 +102,14 @@ func (gs *GourdianGinServer) Start() error {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		address := fmt.Sprintf(":%d", gs.config.Port)
 		if gs.config.UseTLS {
-			gs.config.Logger.Infof("Starting server on https://localhost%s with TLS", address)
+			gs.config.Logger.Infof("Starting server on port %d with TLS", gs.config.Port)
 			if err := gs.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
 				gs.config.Logger.Errorf("Server error: %v", err)
 				serverErr <- err
 			}
 		} else {
-			gs.config.Logger.Infof("Starting server on http://localhost%s", address)
+			gs.config.Logger.Infof("Starting server on port %d without TLS", gs.config.Port)
 			if err := gs.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				gs.config.Logger.Errorf("Server error: %v", err)
 				serverErr <- err
