@@ -1,0 +1,45 @@
+logan@WarHammer ~/gourdiangin (master)> make release
+git tag v0.0.1
+git push origin v0.0.1
+Total 0 (delta 0), reused 0 (delta 0), pack-reused 0
+To github.com:gourdian25/gourdiangin.git
+ * [new tag]         v0.0.1 -> v0.0.1
+goreleaser release --clean
+  • starting release...
+  • loading                                          path=.goreleaser.yml
+  • loading environment variables
+    • using token from  $GITHUB_TOKEN 
+  • getting and validating git state
+    • couldn't find any tags before "v0.0.1"
+    • git state                                      commit=2d26a47c0ffc92d52d158a07740c176533aa2add branch=master current_tag=v0.0.1 previous_tag=<unknown> dirty=false
+  • parsing tag
+  • setting defaults
+  • running before hooks
+    • running                                        hook=go mod tidy
+  • checking distribution directory
+  • setting up metadata
+  • storing release metadata
+    • writing                                        file=dist/metadata.json
+  • loading go mod information
+  • build prerequisites
+  • writing effective config file
+    • writing                                        config=dist/config.yaml
+  • building binaries
+    • skip is set                                    id=library
+  • generating changelog
+    • writing                                        changelog=dist/CHANGELOG.md
+  • archives
+  • calculating checksums
+  • publishing
+    • scm releases
+      • creating or updating release                 tag=v0.0.1 repo=gourdian25/gourdiangin
+      • release created                              name=v0.0.1 release-id=213930127 request-id=90FA:3223EF:5334F4:60EDFA:6807949C
+      • release updated                              name= release-id=213930127 request-id=90FA:3223EF:533582:60EE9A:6807949C
+      • release created/updated                      url=https://github.com/gourdian25/gourdiangin/releases/tag/v0.0.1 published=true
+      • took: 2s
+  • took: 2s
+  • storing artifacts metadata
+    • writing                                        file=dist/artifacts.json
+  • announcing
+  • release succeeded after 2s
+  • thanks for using goreleaser!
