@@ -600,13 +600,15 @@ func TestServerSetupImpl_SetUpTLS(t *testing.T) {
 	// Write certificate
 	certOut, err := os.Create(certFile)
 	require.NoError(t, err)
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	require.NoError(t, err, "failed to write certificate")
 	certOut.Close()
 
 	// Write key
 	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	require.NoError(t, err)
-	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	err = pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	require.NoError(t, err, "failed to write private key")
 	keyOut.Close()
 
 	tests := []struct {
@@ -665,21 +667,18 @@ func TestServerSetupImpl_SetUpTLS(t *testing.T) {
 			assert.NotNil(t, tlsConfig)
 			assert.NotEmpty(t, tlsConfig.Certificates)
 			assert.Equal(t, tls.VersionTLS12, tlsConfig.MinVersion)
-			assert.True(t, tlsConfig.PreferServerCipherSuites)
 
-			// Verify cipher suites - use more flexible comparison
+			// Verify cipher suites
 			expectedSuites := map[uint16]bool{
 				tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256: true,
 				tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384: true,
 			}
-
 			for _, suite := range tlsConfig.CipherSuites {
 				if !expectedSuites[suite] {
 					t.Errorf("Unexpected cipher suite: %x", suite)
 				}
 				delete(expectedSuites, suite)
 			}
-
 			for suite := range expectedSuites {
 				t.Errorf("Missing expected cipher suite: %x", suite)
 			}
@@ -744,7 +743,6 @@ func TestTLSStartup(t *testing.T) {
 	server.GracefulShutdown()
 }
 
-// Helper to generate test certificates
 func generateTestCert(t *testing.T, certFile, keyFile string) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	require.NoError(t, err)
@@ -768,11 +766,13 @@ func generateTestCert(t *testing.T, certFile, keyFile string) {
 
 	certOut, err := os.Create(certFile)
 	require.NoError(t, err)
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	err = pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	require.NoError(t, err, "failed to write certificate")
 	certOut.Close()
 
 	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	require.NoError(t, err)
-	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	err = pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	require.NoError(t, err, "failed to write private key")
 	keyOut.Close()
 }

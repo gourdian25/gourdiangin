@@ -4,6 +4,7 @@
 ├── Readme.md
 ├── coverage.html
 ├── coverage.out
+├── docs.go
 ├── example2
 │   └── main.go
 ├── examples
@@ -14,4 +15,4 @@
 ├── gourdiangin_test.go
 └── tree.txt
 
-3 directories, 12 files
+3 directories, 13 files

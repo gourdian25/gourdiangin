@@ -352,7 +352,11 @@ func (gs *GourdianGinServer) Start() error {
 	if err := gs.createPIDFile(); err != nil {
 		return fmt.Errorf("failed to create PID file: %w", err)
 	}
-	defer gs.removePIDFile()
+	defer func() {
+		if err := gs.removePIDFile(); err != nil {
+			gs.config.Logger.Errorf("failed to remove PID file: %v", err)
+		}
+	}()
 
 	serverErr := make(chan error, 1)
 	go func() {
