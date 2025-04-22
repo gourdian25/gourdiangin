@@ -686,3 +686,93 @@ func TestServerSetupImpl_SetUpTLS(t *testing.T) {
 		})
 	}
 }
+
+// TestTLSStartup tests server startup with TLS
+func TestTLSStartup(t *testing.T) {
+	// Create temporary self-signed cert and key
+	tempDir := t.TempDir()
+	certFile := filepath.Join(tempDir, "cert.pem")
+	keyFile := filepath.Join(tempDir, "key.pem")
+
+	// Generate test certs
+	generateTestCert(t, certFile, keyFile)
+
+	// Use a random available port
+	listener, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	config := ServerConfig{
+		Port:           port, // Use the random port we just found
+		UseTLS:         true,
+		TLSCertFile:    certFile,
+		TLSKeyFile:     keyFile,
+		RequestTimeout: 5 * time.Second,
+		Logger:         nil,
+	}
+
+	setup := &ServerSetupImpl{}
+	server := NewGourdianGinServer(setup, config).(*GourdianGinServer)
+
+	// Add test endpoint
+	server.router.GET("/tls-test", func(c *gin.Context) {
+		c.String(http.StatusOK, "OK")
+	})
+
+	// Start server in goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		serverErr <- server.Start()
+	}()
+
+	// Wait a bit for server to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Test TLS connection
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := client.Get(fmt.Sprintf("https://localhost:%d/tls-test", config.Port))
+	require.NoError(t, err, "Failed to make TLS request")
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	// Shutdown server
+	server.GracefulShutdown()
+}
+
+// Helper to generate test certificates
+func generateTestCert(t *testing.T, certFile, keyFile string) {
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization: []string{"Test Org"},
+		},
+		NotBefore: time.Now(),
+		NotAfter:  time.Now().Add(time.Hour),
+		KeyUsage:  x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageServerAuth,
+		},
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	require.NoError(t, err)
+
+	certOut, err := os.Create(certFile)
+	require.NoError(t, err)
+	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	certOut.Close()
+
+	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	require.NoError(t, err)
+	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	keyOut.Close()
+}

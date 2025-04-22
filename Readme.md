@@ -2,7 +2,6 @@
 
 The `gourdiangin` package is a production-ready HTTP server built on top of the popular Gin framework. It provides a robust, configurable, and easy-to-use server implementation with features like TLS support, CORS configuration, graceful shutdown, and structured logging using the `gourdianlogger` package.
 
-
 ---
 
 ## Table of Contents
@@ -40,44 +39,44 @@ Here’s a simple example to get started with the `gourdiangin` package:
 package main
 
 import (
-	"github.com/gourdian25/gourdiangin"
-	"github.com/gourdian25/gourdianlogger"
+ "github.com/gourdian25/gourdiangin"
+ "github.com/gourdian25/gourdianlogger"
 )
 
 func main() {
-	// Create a new logger with default configuration
-	logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
-		Filename:    "myapp.log",
-		MaxBytes:    10 * 1024 * 1024, // 10MB
-		BackupCount: 5,
-		LogLevel:    gourdianlogger.INFO,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer logger.Close()
+ // Create a new logger with default configuration
+ logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
+  Filename:    "myapp.log",
+  MaxBytes:    10 * 1024 * 1024, // 10MB
+  BackupCount: 5,
+  LogLevel:    gourdianlogger.INFO,
+ })
+ if err != nil {
+  panic(err)
+ }
+ defer logger.Close()
 
-	config := gourdiangin.ServerConfig{
-		Port:            8080,
-		UseTLS:          false,
-		UseCORS:         false,
-		Logger:          logger,
-		ShutdownTimeout: 30 * time.Second,
-	}
+ config := gourdiangin.ServerConfig{
+  Port:            8080,
+  UseTLS:          false,
+  UseCORS:         false,
+  Logger:          logger,
+  ShutdownTimeout: 30 * time.Second,
+ }
 
-	setup := &gourdiangin.ServerSetupImpl{}
-	server := gourdiangin.NewGourdianGinServer(setup, config)
+ setup := &gourdiangin.ServerSetupImpl{}
+ server := gourdiangin.NewGourdianGinServer(setup, config)
 
-	router := server.GetRouter()
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Hello, World!",
-		})
-	})
+ router := server.GetRouter()
+ router.GET("/", func(c *gin.Context) {
+  c.JSON(200, gin.H{
+   "message": "Hello, World!",
+  })
+ })
 
-	if err := server.Start(); err != nil {
-		logger.Fatalf("Server failed: %v", err)
-	}
+ if err := server.Start(); err != nil {
+  logger.Fatalf("Server failed: %v", err)
+ }
 }
 ```
 
@@ -89,14 +88,14 @@ The `ServerConfig` struct encapsulates all configuration options for the Gin ser
 
 ```go
 type ServerConfig struct {
-	Port            int
-	UseTLS          bool
-	UseCORS         bool
-	TLSKeyFile      string
-	TLSCertFile     string
-	CORSConfig      cors.Config
-	Logger          *gourdianlogger.Logger
-	ShutdownTimeout time.Duration
+ Port            int
+ UseTLS          bool
+ UseCORS         bool
+ TLSKeyFile      string
+ TLSCertFile     string
+ CORSConfig      cors.Config
+ Logger          *gourdianlogger.Logger
+ ShutdownTimeout time.Duration
 }
 ```
 
@@ -127,44 +126,44 @@ This example demonstrates the most basic usage of the `gourdiangin` package.
 package main
 
 import (
-	"github.com/gourdian25/gourdiangin"
-	"github.com/gourdian25/gourdianlogger"
+ "github.com/gourdian25/gourdiangin"
+ "github.com/gourdian25/gourdianlogger"
 )
 
 func main() {
-	// Create a new logger with default configuration
-	logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
-		Filename:    "myapp.log",
-		MaxBytes:    10 * 1024 * 1024, // 10MB
-		BackupCount: 5,
-		LogLevel:    gourdianlogger.INFO,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer logger.Close()
+ // Create a new logger with default configuration
+ logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
+  Filename:    "myapp.log",
+  MaxBytes:    10 * 1024 * 1024, // 10MB
+  BackupCount: 5,
+  LogLevel:    gourdianlogger.INFO,
+ })
+ if err != nil {
+  panic(err)
+ }
+ defer logger.Close()
 
-	config := gourdiangin.ServerConfig{
-		Port:            8080,
-		UseTLS:          false,
-		UseCORS:         false,
-		Logger:          logger,
-		ShutdownTimeout: 30 * time.Second,
-	}
+ config := gourdiangin.ServerConfig{
+  Port:            8080,
+  UseTLS:          false,
+  UseCORS:         false,
+  Logger:          logger,
+  ShutdownTimeout: 30 * time.Second,
+ }
 
-	setup := &gourdiangin.ServerSetupImpl{}
-	server := gourdiangin.NewGourdianGinServer(setup, config)
+ setup := &gourdiangin.ServerSetupImpl{}
+ server := gourdiangin.NewGourdianGinServer(setup, config)
 
-	router := server.GetRouter()
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Hello, World!",
-		})
-	})
+ router := server.GetRouter()
+ router.GET("/", func(c *gin.Context) {
+  c.JSON(200, gin.H{
+   "message": "Hello, World!",
+  })
+ })
 
-	if err := server.Start(); err != nil {
-		logger.Fatalf("Server failed: %v", err)
-	}
+ if err := server.Start(); err != nil {
+  logger.Fatalf("Server failed: %v", err)
+ }
 }
 ```
 
@@ -178,45 +177,45 @@ This example demonstrates how to set up the server with TLS.
 package main
 
 import (
-	"github.com/gourdian25/gourdiangin"
-	"github.com/gourdian25/gourdianlogger"
+ "github.com/gourdian25/gourdiangin"
+ "github.com/gourdian25/gourdianlogger"
 )
 
 func main() {
-	// Create a new logger with default configuration
-	logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
-		Filename:    "myapp.log",
-		MaxBytes:    10 * 1024 * 1024, // 10MB
-		BackupCount: 5,
-		LogLevel:    gourdianlogger.INFO,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer logger.Close()
+ // Create a new logger with default configuration
+ logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
+  Filename:    "myapp.log",
+  MaxBytes:    10 * 1024 * 1024, // 10MB
+  BackupCount: 5,
+  LogLevel:    gourdianlogger.INFO,
+ })
+ if err != nil {
+  panic(err)
+ }
+ defer logger.Close()
 
-	config := gourdiangin.ServerConfig{
-		Port:            8443,
-		UseTLS:          true,
-		TLSCertFile:     "cert.pem",
-		TLSKeyFile:      "key.pem",
-		Logger:          logger,
-		ShutdownTimeout: 30 * time.Second,
-	}
+ config := gourdiangin.ServerConfig{
+  Port:            8443,
+  UseTLS:          true,
+  TLSCertFile:     "cert.pem",
+  TLSKeyFile:      "key.pem",
+  Logger:          logger,
+  ShutdownTimeout: 30 * time.Second,
+ }
 
-	setup := &gourdiangin.ServerSetupImpl{}
-	server := gourdiangin.NewGourdianGinServer(setup, config)
+ setup := &gourdiangin.ServerSetupImpl{}
+ server := gourdiangin.NewGourdianGinServer(setup, config)
 
-	router := server.GetRouter()
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Secure Hello, World!",
-		})
-	})
+ router := server.GetRouter()
+ router.GET("/", func(c *gin.Context) {
+  c.JSON(200, gin.H{
+   "message": "Secure Hello, World!",
+  })
+ })
 
-	if err := server.Start(); err != nil {
-		logger.Fatalf("Server failed: %v", err)
-	}
+ if err := server.Start(); err != nil {
+  logger.Fatalf("Server failed: %v", err)
+ }
 }
 ```
 
@@ -230,50 +229,50 @@ This example demonstrates how to enable and configure CORS.
 package main
 
 import (
-	"github.com/gin-contrib/cors"
-	"github.com/gourdian25/gourdiangin"
-	"github.com/gourdian25/gourdianlogger"
+ "github.com/gin-contrib/cors"
+ "github.com/gourdian25/gourdiangin"
+ "github.com/gourdian25/gourdianlogger"
 )
 
 func main() {
-	// Create a new logger with default configuration
-	logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
-		Filename:    "myapp.log",
-		MaxBytes:    10 * 1024 * 1024, // 10MB
-		BackupCount: 5,
-		LogLevel:    gourdianlogger.INFO,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer logger.Close()
+ // Create a new logger with default configuration
+ logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
+  Filename:    "myapp.log",
+  MaxBytes:    10 * 1024 * 1024, // 10MB
+  BackupCount: 5,
+  LogLevel:    gourdianlogger.INFO,
+ })
+ if err != nil {
+  panic(err)
+ }
+ defer logger.Close()
 
-	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = []string{"https://trusted-site.com"}
-	corsConfig.AllowCredentials = true
+ corsConfig := cors.DefaultConfig()
+ corsConfig.AllowOrigins = []string{"https://trusted-site.com"}
+ corsConfig.AllowCredentials = true
 
-	config := gourdiangin.ServerConfig{
-		Port:            8080,
-		UseTLS:          false,
-		UseCORS:         true,
-		CORSConfig:      corsConfig,
-		Logger:          logger,
-		ShutdownTimeout: 30 * time.Second,
-	}
+ config := gourdiangin.ServerConfig{
+  Port:            8080,
+  UseTLS:          false,
+  UseCORS:         true,
+  CORSConfig:      corsConfig,
+  Logger:          logger,
+  ShutdownTimeout: 30 * time.Second,
+ }
 
-	setup := &gourdiangin.ServerSetupImpl{}
-	server := gourdiangin.NewGourdianGinServer(setup, config)
+ setup := &gourdiangin.ServerSetupImpl{}
+ server := gourdiangin.NewGourdianGinServer(setup, config)
 
-	router := server.GetRouter()
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "CORS Enabled!",
-		})
-	})
+ router := server.GetRouter()
+ router.GET("/", func(c *gin.Context) {
+  c.JSON(200, gin.H{
+   "message": "CORS Enabled!",
+  })
+ })
 
-	if err := server.Start(); err != nil {
-		logger.Fatalf("Server failed: %v", err)
-	}
+ if err := server.Start(); err != nil {
+  logger.Fatalf("Server failed: %v", err)
+ }
 }
 ```
 
@@ -287,52 +286,52 @@ This example demonstrates how to add custom middleware to the Gin router.
 package main
 
 import (
-	"github.com/gourdian25/gourdiangin"
-	"github.com/gourdian25/gourdianlogger"
-	"github.com/gin-gonic/gin"
+ "github.com/gourdian25/gourdiangin"
+ "github.com/gourdian25/gourdianlogger"
+ "github.com/gin-gonic/gin"
 )
 
 func customMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-	}
+ return func(c *gin.Context) {
+  c.Next()
+ }
 }
 
 func main() {
-	// Create a new logger with default configuration
-	logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
-		Filename:    "myapp.log",
-		MaxBytes:    10 * 1024 * 1024, // 10MB
-		BackupCount: 5,
-		LogLevel:    gourdianlogger.INFO,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer logger.Close()
+ // Create a new logger with default configuration
+ logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
+  Filename:    "myapp.log",
+  MaxBytes:    10 * 1024 * 1024, // 10MB
+  BackupCount: 5,
+  LogLevel:    gourdianlogger.INFO,
+ })
+ if err != nil {
+  panic(err)
+ }
+ defer logger.Close()
 
-	config := gourdiangin.ServerConfig{
-		Port:            8080,
-		UseTLS:          false,
-		UseCORS:         false,
-		Logger:          logger,
-		ShutdownTimeout: 30 * time.Second,
-	}
+ config := gourdiangin.ServerConfig{
+  Port:            8080,
+  UseTLS:          false,
+  UseCORS:         false,
+  Logger:          logger,
+  ShutdownTimeout: 30 * time.Second,
+ }
 
-	setup := &gourdiangin.ServerSetupImpl{}
-	server := gourdiangin.NewGourdianGinServer(setup, config)
+ setup := &gourdiangin.ServerSetupImpl{}
+ server := gourdiangin.NewGourdianGinServer(setup, config)
 
-	router := server.GetRouter()
-	router.Use(customMiddleware())
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Custom Middleware!",
-		})
-	})
+ router := server.GetRouter()
+ router.Use(customMiddleware())
+ router.GET("/", func(c *gin.Context) {
+  c.JSON(200, gin.H{
+   "message": "Custom Middleware!",
+  })
+ })
 
-	if err := server.Start(); err != nil {
-		logger.Fatalf("Server failed: %v", err)
-	}
+ if err := server.Start(); err != nil {
+  logger.Fatalf("Server failed: %v", err)
+ }
 }
 ```
 
@@ -346,60 +345,60 @@ This example demonstrates how to handle graceful shutdown.
 package main
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
+ "os"
+ "os/signal"
+ "syscall"
 
-	"github.com/gourdian25/gourdiangin"
-	"github.com/gourdian25/gourdianlogger"
+ "github.com/gourdian25/gourdiangin"
+ "github.com/gourdian25/gourdianlogger"
 )
 
 func main() {
-	// Create a new logger with default configuration
-	logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
-		Filename:    "myapp.log",
-		MaxBytes:    10 * 1024 * 1024, // 10MB
-		BackupCount: 5,
-		LogLevel:    gourdianlogger.INFO,
-	})
-	if err != nil {
-		panic(err)
-	}
-	defer logger.Close()
+ // Create a new logger with default configuration
+ logger, err := gourdianlogger.NewGourdianLogger(gourdianlogger.LoggerConfig{
+  Filename:    "myapp.log",
+  MaxBytes:    10 * 1024 * 1024, // 10MB
+  BackupCount: 5,
+  LogLevel:    gourdianlogger.INFO,
+ })
+ if err != nil {
+  panic(err)
+ }
+ defer logger.Close()
 
-	config := gourdiangin.ServerConfig{
-		Port:            8080,
-		UseTLS:          false,
-		UseCORS:         false,
-		Logger:          logger,
-		ShutdownTimeout: 30 * time.Second,
-	}
+ config := gourdiangin.ServerConfig{
+  Port:            8080,
+  UseTLS:          false,
+  UseCORS:         false,
+  Logger:          logger,
+  ShutdownTimeout: 30 * time.Second,
+ }
 
-	setup := &gourdiangin.ServerSetupImpl{}
-	server := gourdiangin.NewGourdianGinServer(setup, config)
+ setup := &gourdiangin.ServerSetupImpl{}
+ server := gourdiangin.NewGourdianGinServer(setup, config)
 
-	router := server.GetRouter()
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Graceful Shutdown!",
-		})
-	})
+ router := server.GetRouter()
+ router.GET("/", func(c *gin.Context) {
+  c.JSON(200, gin.H{
+   "message": "Graceful Shutdown!",
+  })
+ })
 
-	// Start server in a separate goroutine
-	go func() {
-		if err := server.Start(); err != nil {
-			logger.Fatalf("Server failed: %v", err)
-		}
-	}()
+ // Start server in a separate goroutine
+ go func() {
+  if err := server.Start(); err != nil {
+   logger.Fatalf("Server failed: %v", err)
+  }
+ }()
 
-	// Wait for interrupt signal to gracefully shutdown the server
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
+ // Wait for interrupt signal to gracefully shutdown the server
+ quit := make(chan os.Signal, 1)
+ signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+ <-quit
 
-	logger.Info("Shutting down server...")
-	server.GracefulShutdown()
-	logger.Info("Server exited")
+ logger.Info("Shutting down server...")
+ server.GracefulShutdown()
+ logger.Info("Server exited")
 }
 ```
 
@@ -417,14 +416,14 @@ The `gourdianlogger` package is used for structured logging. It provides configu
 
 ```go
 type ServerConfig struct {
-	Port            int
-	UseTLS          bool
-	UseCORS         bool
-	TLSKeyFile      string
-	TLSCertFile     string
-	CORSConfig      cors.Config
-	Logger          *gourdianlogger.Logger
-	ShutdownTimeout time.Duration
+ Port            int
+ UseTLS          bool
+ UseCORS         bool
+ TLSKeyFile      string
+ TLSCertFile     string
+ CORSConfig      cors.Config
+ Logger          *gourdianlogger.Logger
+ ShutdownTimeout time.Duration
 }
 ```
 
@@ -432,9 +431,9 @@ type ServerConfig struct {
 
 ```go
 type Server interface {
-	Start() error
-	GracefulShutdown()
-	GetRouter() *gin.Engine
+ Start() error
+ GracefulShutdown()
+ GetRouter() *gin.Engine
 }
 ```
 
@@ -442,10 +441,10 @@ type Server interface {
 
 ```go
 type ServerSetup interface {
-	SetUpRouter(config ServerConfig) *gin.Engine
-	SetUpTLS(config ServerConfig) (*tls.Config, error)
-	SetUpCORS(router *gin.Engine, config ServerConfig)
-	CheckPortAvailability(config ServerConfig) error
+ SetUpRouter(config ServerConfig) *gin.Engine
+ SetUpTLS(config ServerConfig) (*tls.Config, error)
+ SetUpCORS(router *gin.Engine, config ServerConfig)
+ CheckPortAvailability(config ServerConfig) error
 }
 ```
 
@@ -453,12 +452,12 @@ type ServerSetup interface {
 
 ```go
 type GourdianGinServer struct {
-	router      *gin.Engine
-	server      *http.Server
-	serverSetup ServerSetup
-	config      ServerConfig
-	shutdownWg  sync.WaitGroup
-	stopChan    chan os.Signal
+ router      *gin.Engine
+ server      *http.Server
+ serverSetup ServerSetup
+ config      ServerConfig
+ shutdownWg  sync.WaitGroup
+ stopChan    chan os.Signal
 }
 ```
 
@@ -475,6 +474,7 @@ type GourdianGinServer struct {
 ## Sigil - SSL and RSA Key Generation
 
 **Sigil** is a powerful and user-friendly command-line tool designed to simplify the generation of:
+
 1. **Self-signed SSL certificates** for securing gRPC communications.
 2. **RSA keys** for signing and verifying JWT tokens.
 
@@ -503,6 +503,7 @@ This tool is perfect for developers who need to quickly set up secure communicat
 You can install Sigil directly using a single command. However, the installation method depends on your shell:
 
 #### For Bash or Zsh
+
 Run the following command in your terminal:
 
 ```bash
@@ -510,6 +511,7 @@ curl -fsSL https://raw.githubusercontent.com/gourdian25/sigil/master/install.sh 
 ```
 
 #### For Fish Shell
+
 Fish shell requires explicit use of `bash` to interpret the script. Run:
 
 ```fish
@@ -517,24 +519,29 @@ curl -fsSL https://raw.githubusercontent.com/gourdian25/sigil/master/install.sh 
 ```
 
 #### Manual Installation
+
 If the above methods don't work, you can manually download and install Sigil:
 
 1. Download the script:
+
    ```bash
    curl -fsSL https://raw.githubusercontent.com/gourdian25/sigil/master/install.sh -o install.sh
    ```
 
 2. Make it executable:
+
    ```bash
    chmod +x install.sh
    ```
 
 3. Run the script:
+
    ```bash
    ./install.sh
    ```
 
 This script will:
+
 1. Download the latest version of Sigil.
 2. Make it executable.
 3. Place it in a directory included in your `$PATH` (e.g., `/usr/local/bin`).
@@ -570,6 +577,7 @@ Contributions to `gourdiangin` and `Sigil` are welcome! If you'd like to contrib
 ## Support
 
 If you encounter any issues or have questions, please open an issue on the GitHub repositories:
+
 - [gourdiangin Issues](https://github.com/gourdian25/gourdiangin/issues)
 
 ---

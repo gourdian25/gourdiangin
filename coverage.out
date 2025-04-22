@@ -63,7 +63,7 @@ github.com/gourdian25/gourdiangin/gourdiangin.go:217.44,221.43 3 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:221.43,223.3 1 0
 github.com/gourdian25/gourdiangin/gourdiangin.go:224.2,227.12 3 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:227.12,229.23 2 1
-github.com/gourdian25/gourdiangin/gourdiangin.go:229.23,232.4 2 0
+github.com/gourdian25/gourdiangin/gourdiangin.go:229.23,232.4 2 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:232.9,235.4 2 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:236.3,236.48 1 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:236.48,239.4 2 0
@@ -71,7 +71,7 @@ github.com/gourdian25/gourdiangin/gourdiangin.go:242.2,242.9 1 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:243.26,244.45 1 0
 github.com/gourdian25/gourdiangin/gourdiangin.go:245.21,247.23 2 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:251.47,255.18 3 1
-github.com/gourdian25/gourdiangin/gourdiangin.go:255.18,257.3 1 0
+github.com/gourdian25/gourdiangin/gourdiangin.go:255.18,257.3 1 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:259.2,262.48 3 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:262.48,264.3 1 0
 github.com/gourdian25/gourdiangin/gourdiangin.go:266.2,267.12 2 1
@@ -97,7 +97,7 @@ github.com/gourdian25/gourdiangin/gourdiangin.go:331.2,332.16 2 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:332.16,333.27 1 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:333.27,335.4 1 0
 github.com/gourdian25/gourdiangin/gourdiangin.go:336.3,336.68 1 1
-github.com/gourdian25/gourdiangin/gourdiangin.go:339.2,347.8 1 0
+github.com/gourdian25/gourdiangin/gourdiangin.go:339.2,347.8 1 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:350.78,351.20 1 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:351.20,353.27 2 1
 github.com/gourdian25/gourdiangin/gourdiangin.go:353.27,355.4 1 0
