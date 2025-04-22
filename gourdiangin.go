@@ -22,6 +22,28 @@ import (
 	"github.com/gourdian25/gourdianlogger"
 )
 
+// ServerConfig defines the configuration options for the GourdianGin server.
+//
+// Fields:
+//   - Port: The port number to listen on (1-65535)
+//   - UseTLS: Whether to enable TLS/HTTPS
+//   - UseCORS: Whether to enable CORS middleware
+//   - TLSKeyFile: Path to TLS key file (required if UseTLS is true)
+//   - TLSCertFile: Path to TLS certificate file (required if UseTLS is true)
+//   - PIDFile: Path to write the process ID file (optional)
+//   - CORSConfig: Configuration for CORS middleware
+//   - Logger: Custom logger instance (will create default if nil)
+//   - ShutdownTimeout: Duration to wait for graceful shutdown (default 30s)
+//   - RequestTimeout: Timeout for HTTP requests (must be > 0)
+//
+// Example:
+//
+//	config := ServerConfig{
+//	    Port:           8080,
+//	    UseTLS:         false,
+//	    RequestTimeout: 10 * time.Second,
+//	    Logger:         myCustomLogger,
+//	}
 type ServerConfig struct {
 	Port            int
 	UseTLS          bool
@@ -35,6 +57,22 @@ type ServerConfig struct {
 	RequestTimeout  time.Duration
 }
 
+// Validate checks the server configuration for correctness.
+//
+// Checks:
+//   - Port is in valid range (1-65535)
+//   - TLS files are provided if TLS is enabled
+//   - Request timeout is positive
+//
+// Returns:
+//   - error describing any validation failures
+//
+// Example:
+//
+//	config := ServerConfig{Port: 8080}
+//	if err := config.Validate(); err != nil {
+//	    // Handle invalid config
+//	}
 func (c ServerConfig) Validate() error {
 	if c.Port < 1 || c.Port > 65535 {
 		return fmt.Errorf("invalid port number: %d", c.Port)
@@ -48,6 +86,22 @@ func (c ServerConfig) Validate() error {
 	return nil
 }
 
+// Server defines the interface for the GourdianGin server.
+//
+// Implementations should provide:
+//   - Start(): Start the server and listen for requests
+//   - GracefulShutdown(): Initiate a graceful shutdown
+//   - GetRouter(): Access the Gin router for route registration
+//   - GetServer(): Access the underlying HTTP server
+//
+// Example:
+//
+//	server := NewGourdianGinServer(&ServerSetupImpl{}, config)
+//	router := server.GetRouter()
+//	router.GET("/", func(c *gin.Context) { c.String(200, "Hello") })
+//	go server.Start()
+//	// Later...
+//	server.GracefulShutdown()
 type Server interface {
 	Start() error
 	GracefulShutdown()
@@ -55,6 +109,16 @@ type Server interface {
 	GetServer() *http.Server
 }
 
+// GourdianGinServer implements the Server interface with Gin as the HTTP engine.
+//
+// It provides:
+//   - Graceful startup and shutdown
+//   - PID file management
+//   - TLS support
+//   - Request timeouts
+//   - CORS configuration
+//
+// Create using NewGourdianGinServer() rather than direct instantiation.
 type GourdianGinServer struct {
 	router      *gin.Engine
 	server      *http.Server
@@ -64,6 +128,29 @@ type GourdianGinServer struct {
 	stopChan    chan os.Signal
 }
 
+// NewGourdianGinServer creates a new configured GourdianGin server instance.
+//
+// Parameters:
+//   - setup: ServerSetup implementation for customizing server behavior
+//   - config: Server configuration
+//
+// Returns:
+//   - A ready-to-use Server instance
+//
+// Example:
+//
+//	setup := &ServerSetupImpl{}
+//	config := ServerConfig{
+//	    Port: 8080,
+//	    RequestTimeout: 10 * time.Second,
+//	}
+//	server := NewGourdianGinServer(setup, config)
+//	server.GetRouter().GET("/", func(c *gin.Context) {
+//	    c.JSON(200, gin.H{"message": "Hello"})
+//	})
+//	if err := server.Start(); err != nil {
+//	    log.Fatal(err)
+//	}
 func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
 	if config.Logger == nil {
 		logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
@@ -108,6 +195,18 @@ func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
 	}
 }
 
+// GetServer returns the underlying http.Server instance.
+//
+// Useful for advanced configuration not exposed through ServerConfig.
+//
+// Returns:
+//   - *http.Server: The HTTP server instance
+//
+// Example:
+//
+//	server := NewGourdianGinServer(setup, config)
+//	httpServer := server.GetServer()
+//	httpServer.ReadTimeout = 5 * time.Second
 func (gs *GourdianGinServer) GetServer() *http.Server {
 	return gs.server
 }
@@ -145,6 +244,21 @@ func (gs *GourdianGinServer) removePIDFile() error {
 	return nil
 }
 
+// StopProcessFromPIDFile stops a running server process by reading its PID from a file.
+//
+// Parameters:
+//   - pidFile: Path to the PID file
+//   - logger: Optional logger (will create default if nil)
+//
+// Returns:
+//   - error if any critical error occurs during shutdown
+//
+// Example:
+//
+//	err := StopProcessFromPIDFile("/var/run/server.pid", nil)
+//	if err != nil {
+//	    log.Fatalf("Failed to stop process: %v", err)
+//	}
 func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error {
 	if logger == nil {
 		logger, _ = gourdianlogger.NewGourdianLoggerWithDefault()
@@ -214,6 +328,23 @@ func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error
 	return nil
 }
 
+// Start begins listening for HTTP requests and blocks until shutdown.
+//
+// Features:
+//   - Creates PID file if configured
+//   - Starts HTTP or HTTPS server based on config
+//   - Handles shutdown signals
+//   - Cleans up PID file on exit
+//
+// Returns:
+//   - error if server fails to start or shutdown properly
+//
+// Example:
+//
+//	server := NewGourdianGinServer(setup, config)
+//	if err := server.Start(); err != nil {
+//	    log.Fatal(err)
+//	}
 func (gs *GourdianGinServer) Start() error {
 	gs.shutdownWg.Add(1)
 	defer gs.shutdownWg.Done()
@@ -248,6 +379,19 @@ func (gs *GourdianGinServer) Start() error {
 	}
 }
 
+// GracefulShutdown initiates a graceful shutdown of the server.
+//
+// Behavior:
+//   - Sends shutdown signal to server
+//   - Waits for active connections to complete
+//   - Times out after ShutdownTimeout + 5s buffer
+//
+// Example:
+//
+//	server := NewGourdianGinServer(setup, config)
+//	go server.Start()
+//	// On SIGTERM or other shutdown need:
+//	server.GracefulShutdown()
 func (gs *GourdianGinServer) shutdown() error {
 	gs.config.Logger.Info("Shutting down server...")
 
@@ -267,6 +411,20 @@ func (gs *GourdianGinServer) shutdown() error {
 	return nil
 }
 
+// GetRouter returns the Gin router instance for route registration.
+//
+// This allows adding routes and middleware before starting the server.
+//
+// Returns:
+//   - *gin.Engine: The Gin router instance
+//
+// Example:
+//
+//	server := NewGourdianGinServer(setup, config)
+//	router := server.GetRouter()
+//	router.GET("/", func(c *gin.Context) {
+//	    c.String(200, "Hello World")
+//	})
 func (gs *GourdianGinServer) GetRouter() *gin.Engine {
 	return gs.router
 }
@@ -293,6 +451,28 @@ func (gs *GourdianGinServer) GracefulShutdown() {
 	}
 }
 
+// ServerSetup defines the interface for customizing server setup behavior.
+//
+// Implementations should provide methods for:
+//   - Router setup
+//   - TLS configuration
+//   - CORS setup
+//   - Port availability checking
+//
+// The default implementation is ServerSetupImpl.
+//
+// Example of custom setup:
+//
+//	type MyCustomSetup struct {
+//	    ServerSetupImpl // embed default implementation
+//	}
+//
+//	func (s *MyCustomSetup) SetUpRouter(config ServerConfig) *gin.Engine {
+//	    router := gin.New()
+//	    // Custom middleware
+//	    router.Use(myCustomMiddleware)
+//	    return router
+//	}
 type ServerSetup interface {
 	SetUpRouter(config ServerConfig) *gin.Engine
 	SetUpTLS(config ServerConfig) (*tls.Config, error)
@@ -300,6 +480,16 @@ type ServerSetup interface {
 	CheckPortAvailability(config ServerConfig) error
 }
 
+// ServerSetupImpl provides the default implementation of ServerSetup.
+//
+// Features:
+//   - Creates Gin router with default middleware
+//   - Implements request timeouts
+//   - Configures TLS with secure defaults
+//   - Sets up CORS if enabled
+//   - Checks port availability with retries
+//
+// Can be embedded in custom implementations to override specific methods.
 type ServerSetupImpl struct{}
 
 func (s *ServerSetupImpl) SetUpRouter(config ServerConfig) *gin.Engine {

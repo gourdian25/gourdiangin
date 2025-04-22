@@ -498,7 +498,7 @@ This tool is perfect for developers who need to quickly set up secure communicat
   - Guided prompts for configuring certificates and keys.
   - Real-time feedback and progress indicators.
 
-### Installation
+### Sigil Installation
 
 You can install Sigil directly using a single command. However, the installation method depends on your shell:
 
@@ -554,7 +554,7 @@ To start using Sigil, simply run the following command:
 sigil
 ```
 
-For more detailed usage instructions, refer to the [Sigil Documentation](#sigil-ssl-and-rsa-key-generation).
+For more detailed usage instructions, refer to the [Sigil Documentation] (#sigil-ssl-and-rsa-key-generation).
 
 ---
 

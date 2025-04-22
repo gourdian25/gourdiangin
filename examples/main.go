@@ -96,3 +96,57 @@ func main() {
 	}
 
 }
+
+// package main
+
+// import (
+// 	"time"
+// 	"github.com/gin-gonic/gin"
+// 	"github.com/gourdian25/gourdianlogger"
+// 	"path/to/gourdiangin"
+// )
+
+// func main() {
+// 	// Create a logger
+// 	logger, _ := gourdianlogger.NewGourdianLoggerWithDefault()
+// 	defer logger.Close()
+
+// 	// Configure the server
+// 	config := gourdiangin.ServerConfig{
+// 		Port:            8080,
+// 		UseTLS:          false,
+// 		UseCORS:         true,
+// 		PIDFile:         "/tmp/gourdian-gin.pid",
+// 		Logger:          logger,
+// 		ShutdownTimeout: 30 * time.Second,
+// 		RequestTimeout:  15 * time.Second,
+// 		CORSConfig: cors.Config{
+// 			AllowOrigins:     []string{"*"},
+// 			AllowMethods:     []string{"GET", "POST"},
+// 			AllowHeaders:     []string{"Origin", "Content-Type"},
+// 			ExposeHeaders:    []string{"Content-Length"},
+// 			AllowCredentials: true,
+// 			MaxAge:           12 * time.Hour,
+// 		},
+// 	}
+
+// 	// Create server with default setup
+// 	server := gourdiangin.NewGourdianGinServer(&gourdiangin.ServerSetupImpl{}, config)
+
+// 	// Set up routes
+// 	router := server.GetRouter()
+// 	router.GET("/", func(c *gin.Context) {
+// 		c.JSON(200, gin.H{"message": "Welcome to GourdianGin"})
+// 	})
+
+// 	router.GET("/slow", func(c *gin.Context) {
+// 		time.Sleep(20 * time.Second) // Will timeout due to RequestTimeout
+// 		c.JSON(200, gin.H{"message": "This should timeout"})
+// 	})
+
+// 	// Start server
+// 	logger.Info("Starting server...")
+// 	if err := server.Start(); err != nil {
+// 		logger.Fatalf("Server failed: %v", err)
+// 	}
+// }
