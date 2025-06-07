@@ -18,7 +18,7 @@ var startTime = time.Now()
 
 func main() {
 	// Create a logger
-	logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
+	logger, err := gourdianlogger.NewDefaultGourdianLogger()
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
 	}

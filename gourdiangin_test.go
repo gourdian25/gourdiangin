@@ -230,7 +230,7 @@ func TestPIDFileOperations(t *testing.T) {
 	tempDir := t.TempDir()
 	pidFile := filepath.Join(tempDir, "test.pid")
 
-	logger, _ := gourdianlogger.NewGourdianLoggerWithDefault()
+	logger, _ := gourdianlogger.NewDefaultGourdianLogger()
 	defer logger.Close()
 
 	server := &GourdianGinServer{
@@ -290,7 +290,7 @@ func TestStopProcessFromPIDFile(t *testing.T) {
 	pidFile := filepath.Join(tempDir, "test.pid")
 	nonexistentPidFile := filepath.Join(tempDir, "nonexistent.pid")
 
-	logger, _ := gourdianlogger.NewGourdianLoggerWithDefault()
+	logger, _ := gourdianlogger.NewDefaultGourdianLogger()
 	defer logger.Close()
 
 	t.Run("Non-existent PID file", func(t *testing.T) {
@@ -402,7 +402,7 @@ func TestGourdianGinServer_PIDFile(t *testing.T) {
 	pidFile := filepath.Join(tempDir, "test.pid")
 
 	// Create a logger that won't panic if used
-	logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
+	logger, err := gourdianlogger.NewDefaultGourdianLogger()
 	require.NoError(t, err)
 	defer logger.Close()
 

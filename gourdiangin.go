@@ -153,7 +153,7 @@ type GourdianGinServer struct {
 //	}
 func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server {
 	if config.Logger == nil {
-		logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
+		logger, err := gourdianlogger.NewDefaultGourdianLogger()
 		if err != nil {
 			panic(fmt.Sprintf("Failed to create default logger: %v", err))
 		}
@@ -261,7 +261,7 @@ func (gs *GourdianGinServer) removePIDFile() error {
 //	}
 func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error {
 	if logger == nil {
-		logger, _ = gourdianlogger.NewGourdianLoggerWithDefault()
+		logger, _ = gourdianlogger.NewDefaultGourdianLogger()
 		defer logger.Close()
 	}
 
