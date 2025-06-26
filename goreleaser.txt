@@ -1,3 +1,5 @@
+# File: goreleaser.txt
+
 logan@WarHammer ~/gourdiangin (master)> make release
 git tag v0.0.1
 git push origin v0.0.1

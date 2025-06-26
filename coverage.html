@@ -69,7 +69,9 @@
 		</div>
 		<div id="content">
 		
-		<pre class="file" id="file0" style="display: none">package gourdiangin
+		<pre class="file" id="file0" style="display: none">// File: gourdiangin.go
+
+package gourdiangin
 
 import (
         "context"
@@ -224,7 +226,7 @@ type GourdianGinServer struct {
 //        }
 func NewGourdianGinServer(setup ServerSetup, config ServerConfig) Server <span class="cov8" title="1">{
         if config.Logger == nil </span><span class="cov8" title="1">{
-                logger, err := gourdianlogger.NewGourdianLoggerWithDefault()
+                logger, err := gourdianlogger.NewDefaultGourdianLogger()
                 if err != nil </span><span class="cov0" title="0">{
                         panic(fmt.Sprintf("Failed to create default logger: %v", err))</span>
                 }
@@ -332,7 +334,7 @@ func (gs *GourdianGinServer) removePIDFile() error <span class="cov8" title="1">
 //        }
 func StopProcessFromPIDFile(pidFile string, logger *gourdianlogger.Logger) error <span class="cov8" title="1">{
         if logger == nil </span><span class="cov0" title="0">{
-                logger, _ = gourdianlogger.NewGourdianLoggerWithDefault()
+                logger, _ = gourdianlogger.NewDefaultGourdianLogger()
                 defer logger.Close()
         }</span>
 

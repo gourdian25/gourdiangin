@@ -1,3 +1,5 @@
+// File: docs.go
+
 // Package gourdiangin provides a production-ready, modular, and extensible HTTP server
 // implementation using the Gin web framework.
 //
